@@ -151,3 +151,34 @@ with tab3:
         if st.button("Ver Diferencia de Consumo Promedio"):
             diff = df_existente.groupby("Ruta")["Consumo_L100"].mean()
             st.write(diff)
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+
+# --- CONFIGURACIÓN DE LA CONEXIÓN ---
+# En el sidebar o configuración, pegaremos la URL de tu Google Sheet
+url_hoja = "TU_URL_DE_GOOGLE_SHEETS_AQUÍ"
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def cargar_datos_google():
+    try:
+        # Lee los datos directamente desde Google Sheets
+        return conn.read(spreadsheet=url_hoja)
+    except:
+        return pd.DataFrame()
+
+# ... (El resto del código de la interfaz se mantiene igual) ...
+
+# --- AL GUARDAR EL REGISTRO ---
+# Cambiaremos la parte del botón de guardar para que haga esto:
+if st.form_submit_button("💾 GUARDAR REGISTRO"):
+    # ... (cálculos de km_r, desv, etc.) ...
+    nuevo_dato = pd.DataFrame([{...}]) # Tus datos
+    
+    # Combinar existentes con el nuevo
+    df_actualizado = pd.concat([df_existente, nuevo_dato], ignore_index=True)
+    
+    # Actualizar la hoja de Google
+    conn.update(spreadsheet=url_hoja, data=df_actualizado)
+    st.success("¡Datos guardados en Google Sheets!")            
