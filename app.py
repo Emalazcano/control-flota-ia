@@ -157,7 +157,7 @@ import pandas as pd
 
 # --- CONFIGURACIÓN DE LA CONEXIÓN ---
 # En el sidebar o configuración, pegaremos la URL de tu Google Sheet
-url_hoja = "TU_URL_DE_GOOGLE_SHEETS_AQUÍ"
+url_hoja = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
