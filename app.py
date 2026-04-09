@@ -49,7 +49,7 @@ if "auth" not in st.session_state:
             else: st.error("❌")
     st.stop()
 
-# --- 3. CARGA DE DATOS Y LISTAS ---
+# --- 3. CARGA DE DATOS ---
 df_h = obtener_datos()
 lista_choferes = obtener_choferes_repo()
 
@@ -68,8 +68,8 @@ with tabs[0]:
     with st.form("registro_final", clear_on_submit=True):
         
         c_p, _ = st.columns([1, 2])
-        # ESTE VALOR ES EL QUE SE USA PARA EL CÁLCULO
-        precio_gasoil = c_p.number_input("💵 Precio Gasoil por Litro ($)", min_value=0.0, value=1100.0)
+        # Input de precio para Cálculo Preciso
+        precio_gasoil = c_p.number_input("💵 Precio Gasoil por Litro ($)", min_value=0.0, value=1100.0, step=0.1)
         
         st.divider()
         
@@ -95,17 +95,18 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero", min_value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", min_value=0.0)
         
-        # --- LÓGICA DE CÁLCULO REVISADA ---
+        # --- LÓGICA DE VISUALIZACIÓN (EL CUADRO AZUL) ---
         recorrido = kmf - kmi
         consumo = (lt / recorrido * 100) if recorrido > 0 else 0
         desvio = lt - (ltab + lral)
-        costo_total = lt * precio_gasoil
-        costo_ralenti = lral * precio_gasoil
+        costo_v = lt * precio_gasoil
+        costo_r = lral * precio_gasoil
         
-        st.info(f"📊 **Cálculo:** {recorrido} km | {consumo:.2f} L/100 | Costo Total: $ {costo_total:,.2f}")
+        # Restauramos la visualización del costo estimado en pesos
+        st.info(f"📊 **Resumen:** {recorrido} km | {consumo:.2f} L/100 | **Costo Estimado: $ {costo_v:,.2f}**")
         
         if st.form_submit_button("💾 GUARDAR REGISTRO"):
-            if kmf > kmi and lt > 0 and traza_final not in ["", "➕ NUEVA TRAZA"]:
+            if kmf > kmi and lt > 0 and (traza_final not in ["", "➕ NUEVA TRAZA"]):
                 nuevo = {
                     "Fecha": fecha.strftime('%d/%m/%Y'),
                     "Chofer": chofer, "Movil": movil, "Marca": marca, "Ruta": ruta_tipo, 
@@ -113,25 +114,25 @@ with tabs[0]:
                     "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Desvio_Neto": round(desvio, 2), 
                     "Consumo_L100": round(consumo, 2),
-                    "Costo_Total_ARS": round(costo_total, 2), 
-                    "Costo_Ralenti_ARS": round(costo_ralenti, 2)
+                    "Costo_Total_ARS": round(costo_v, 2), # Se guarda el costo calculado con el precio de hoy
+                    "Costo_Ralenti_ARS": round(costo_r, 2)
                 }
                 df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success(f"✅ Guardado. Costo calculado: $ {costo_total:,.2f}")
+                st.success(f"✅ ¡Guardado! Costo del viaje: $ {costo_v:,.2f}")
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("⚠️ Error: Revisá los KM o que la Traza tenga nombre.")
+                st.error("⚠️ Verificá los KM y que la Traza tenga nombre.")
 
 # --- PESTAÑA IA ---
 with tabs[1]:
     st.subheader("🦅 Inteligencia de Flota")
     if not df_h.empty:
         m1, m2, m3 = st.columns(3)
-        m1.metric("💰 Gasto Total", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
+        m1.metric("💰 Gasto Histórico", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
         m2.metric("🛑 Pérdida Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
-        m3.metric("📉 Promedio Flota", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
+        m3.metric("📉 Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
     else: st.info("Sin datos.")
 
 # --- PESTAÑA HISTORIAL ---
