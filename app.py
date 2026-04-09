@@ -11,7 +11,7 @@ from fpdf import FPDF
 st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 
 # --- 2. CONEXIÓN ---
-# ⚠️ REEMPLAZA CON TU URL
+# ⚠️ REEMPLAZA CON TU URL DE GOOGLE SHEETS
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -35,7 +35,6 @@ def generar_comprobante_pdf(datos):
     pdf.line(10, 35, 200, 35)
     pdf.ln(5)
     pdf.set_font("Arial", size=11)
-    # Usamos items() para recorrer el diccionario de datos
     for clave, valor in datos.items():
         pdf.set_font("Arial", "B", 11)
         pdf.cell(50, 8, f"{clave}:", border="B")
@@ -49,9 +48,8 @@ def generar_comprobante_pdf(datos):
 def check_password():
     if "password_correct" not in st.session_state:
         st.title("🔐 Acceso Sistema de Flota")
-        # Agregamos placeholders para evitar campos vacíos
         st.text_input("Usuario", key="username", placeholder="Ej: ema_admin")
-        st.text_input("Contraseña", type="password", key="password", placeholder="****")
+        st.text_input("Contraseña", type="password", key="password")
         if st.button("Ingresar"):
             usuarios_validos = {"ema_admin": "jujuy2024", "operador": "flota123"}
             user = st.session_state.get("username", "")
@@ -68,10 +66,8 @@ def check_password():
 # --- 4. PROGRAMA PRINCIPAL ---
 
 if check_password():
-    # USAMOS .get() PARA EVITAR EL KEYERROR
     user_logueado = st.session_state.get("username", "ADMIN").upper()
     role = st.session_state.get("user_role", "operador")
-    
     df_historico = obtener_datos()
 
     # Sidebar
@@ -82,71 +78,102 @@ if check_password():
     menu = st.sidebar.selectbox("Menú Principal", opciones, key="menu_unico")
 
     if st.sidebar.button("🚪 Cerrar Sesión"):
-        for key in list(st.session_state.keys()): 
-            del st.session_state[key]
+        for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
     # --- LÓGICA DE MENÚ ---
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
         
+        # Sugerencia de KM inicial basada en el último registro
+        km_sugerido = 0
+        movil_sel = st.selectbox("Móvil", list(range(1, 101)))
+        if not df_historico.empty and "Movil" in df_historico.columns:
+            # Aseguramos que Movil sea comparado correctamente
+            ultimo = df_historico[df_historico["Movil"].astype(str) == str(movil_sel)]
+            if not ultimo.empty:
+                km_sugerido = ultimo["KM_Fin"].iloc[-1]
+                st.info(f"💡 KM Inicial sugerido: {km_sugerido}")
+
         with st.form("form_carga"):
             col1, col2 = st.columns(2)
             with col1:
-                fecha = st.date_input("Fecha", datetime.now())
-                chofer = st.text_input("Nombre del Chofer") # Text input para simplificar
-                movil = st.selectbox("Móvil", list(range(1, 101)))
+                fecha = st.date_input("Fecha de Carga", datetime.now())
+                chofer = st.text_input("Nombre del Chofer")
                 marca = st.radio("Marca", ["Scania", "Mercedes"])
                 ruta = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
                 traza = st.text_input("Traza (Origen - Destino)")
             with col2:
-                km_ini = st.number_input("KM Inicial", min_value=0)
+                km_ini = st.number_input("KM Inicial", min_value=0, value=int(km_sugerido))
                 km_fin = st.number_input("KM Final", min_value=0)
-                l_ticket = st.number_input("Litros Ticket", min_value=0.0)
-                l_tablero = st.number_input("Litros Tablero", min_value=0.0)
-                l_ralenti = st.number_input("Litros Ralentí", min_value=0.0)
+                l_ticket = st.number_input("Litros Ticket (Carga Real)", min_value=0.0)
+                l_tablero = st.number_input("Litros Tablero (Consumidos)", min_value=0.0)
+                l_ralenti = st.number_input("Litros Ralentí (Vigía)", min_value=0.0)
             
             btn_guardar = st.form_submit_button("💾 GUARDAR Y GENERAR PDF")
 
         if btn_guardar:
             if km_fin <= km_ini:
-                st.error("❌ El KM Final debe ser mayor.")
+                st.error("❌ El KM Final debe ser mayor al Inicial.")
             elif l_ticket <= 0:
                 st.error("❌ Los litros deben ser mayores a 0.")
             else:
                 km_recorr = km_fin - km_ini
                 consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
                 costo_total = l_ticket * precio_litro
+                costo_ralenti = l_ralenti * precio_litro
+                desvio = l_ticket - (l_tablero + l_ralenti)
+                
+                # FORMATEO DE FECHA ARGENTINA PARA EL PDF Y EXCEL
+                fecha_arg = fecha.strftime('%d/%m/%Y')
                 
                 datos_viaje = {
-                    "Fecha": str(fecha), "Chofer": chofer, "Movil": movil,
-                    "Marca": marca, "Ruta": ruta, "Traza": traza,
-                    "KM Recorridos": f"{km_recorr} km", "Litros": f"{l_ticket} L",
-                    "Consumo": f"{round(consumo, 2)} L/100km", "Costo": f"${costo_total:,.2f}"
+                    "Fecha": fecha_arg, 
+                    "Chofer": chofer, 
+                    "Movil": movil_sel,
+                    "Marca": marca, 
+                    "Ruta": ruta, 
+                    "Traza": traza,
+                    "KM_Ini": km_ini,
+                    "KM_Fin": km_fin,
+                    "KM_Recorr": km_recorr, 
+                    "L_Ticket": l_ticket,
+                    "Consumo_L100": round(consumo, 2), 
+                    "Costo_Total_ARS": round(costo_total, 2),
+                    "Costo_Ralenti_ARS": round(costo_ralenti, 2),
+                    "Desvio_Neto": round(desvio, 2)
                 }
                 
-                # Sincronización con Sheets
                 try:
-                    # Agregamos los cálculos al dataframe para el historial
+                    # Sincronización con Google Sheets
                     nuevo_df = pd.DataFrame([datos_viaje])
                     df_final = pd.concat([df_historico, nuevo_df], ignore_index=True)
                     conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                    st.success("✅ Registro guardado en la nube.")
+                    st.success(f"✅ Registro guardado. Costo: ${costo_total:,.2f}")
                     
-                    # Generar PDF
+                    # Generar PDF con los mismos datos
                     pdf_bytes = generar_comprobante_pdf(datos_viaje)
                     st.download_button(
                         label="📥 DESCARGAR COMPROBANTE PDF",
                         data=bytes(pdf_bytes),
-                        file_name=f"Viaje_M{movil}_{fecha}.pdf",
+                        file_name=f"Viaje_M{movil_sel}_{fecha_arg.replace('/','-')}.pdf",
                         mime="application/pdf"
                     )
                 except Exception as e:
-                    st.error(f"Error al guardar: {e}")
+                    if "200" in str(e): st.success("✅ Sincronizado correctamente")
+                    else: st.error(f"Error al guardar: {e}")
 
     elif menu == "Análisis IA & Dashboard":
-        st.header("📊 Inteligencia de Flota")
+        st.header("📊 Inteligencia de Flota y Costos")
         if not df_historico.empty:
+            # Gráfico de Dinero Perdido (Ralentí)
+            st.subheader("📉 Dinero Perdido por Ralentí")
+            fig = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", 
+                         title="Pesos malgastados por motor encendido en espera")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Tabla Histórica con fecha formateada
+            st.subheader("📝 Historial de Registros")
             st.dataframe(df_historico.iloc[::-1])
         else:
-            st.info("No hay datos históricos para mostrar.")
+            st.info("No hay datos históricos para mostrar aún.")
