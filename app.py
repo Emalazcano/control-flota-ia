@@ -163,8 +163,25 @@ with tab_ia:
                 """, unsafe_allow_html=True)
                 
         with g2:
-            st.subheader("📉 Dispersión de Desvíos")
-            # Mantenemos el gráfico de dispersión que te ayuda a ver los "puntos fuera de lugar"
-            fig_d = px.scatter(df_h, x="Fecha", y="Desvio_Neto", color="Marca", 
-                               hover_name="Chofer", size="L_Ticket", template="plotly_dark")
-            st.plotly_chart(fig_d, use_container_width=True)
+            st.subheader("⚠️ Desvío de Combustible por Chofer")
+            # Agrupamos por chofer para ver la suma de sus desvíos
+            desvio_chofer = df_h.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
+            
+            # Creamos el gráfico de barras
+            fig_desvio = px.bar(
+                desvio_chofer,
+                x="Desvio_Neto",
+                y="Chofer",
+                orientation='h',
+                title="Total Litros Desviados (Ticket vs Tablero)",
+                labels={"Desvio_Neto": "Litros de Desvío", "Chofer": "Chofer"},
+                color="Desvio_Neto",
+                color_continuous_scale="Reds", # Los desvíos más altos se verán más rojos
+                template="plotly_dark"
+            )
+            
+            # Ajustamos el diseño para que se vea impecable
+            fig_desvio.update_layout(showlegend=False, height=400)
+            st.plotly_chart(fig_desvio, use_container_width=True)
+            
+            st.info("💡 **Dato clave:** El desvío neto es la diferencia entre los litros del ticket y la suma de (Tablero + Ralentí).")
