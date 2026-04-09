@@ -124,41 +124,60 @@ if check_password():
                     st.error(f"Error: {e}")
 
     elif menu == "Análisis IA & Dashboard":
-        st.header("📊 Inteligencia de Flota y Control")
+        st.header("🦅 Dashboard Ojo de Halcón - Inteligencia de Flota")
         if df_historico.empty:
             st.info("No hay datos para analizar.")
         else:
-            # Preparación de datos
+            # Asegurar datos numéricos
             for c in ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto"]:
                 df_historico[c] = pd.to_numeric(df_historico[c], errors='coerce').fillna(0)
 
-            # MÉTRICAS
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Gasto Total", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
-            m2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
-            m3.metric("Pérdida Ralentí", f"$ {df_historico['Costo_Ralenti_ARS'].sum():,.0f}")
+            # --- 1. DETECCIÓN DE ANOMALÍAS (Ojo de Halcón) ---
+            st.subheader("🚨 Alertas de Anomalías en Tiempo Real")
+            # Calculamos el consumo promedio por Traza para comparar
+            promedio_traza = df_historico.groupby("Traza")["Consumo_L100"].transform("mean")
+            # Marcamos como anomalía si supera el 20% del promedio de esa ruta
+            anomalias = df_historico[df_historico["Consumo_L100"] > (promedio_traza * 1.20)].tail(5)
+
+            if not anomalias.empty:
+                for _, f in anomalias.iterrows():
+                    st.error(f"⚠️ **ALERTA DE CONSUMO ALTO:** Móvil {f['Movil']} en ruta {f['Traza']}. "
+                             f"Consumo: {f['Consumo_L100']} L/100km (Supera el promedio de la ruta).")
+            else:
+                st.success("✅ No se detectaron anomalías de consumo en los últimos registros.")
 
             st.markdown("---")
 
-            # ALERTAS
-            alertas = df_historico[df_historico["Desvio_Neto"].abs() > 15].tail(5)
-            if not alertas.empty:
-                st.subheader("⚠️ Alertas de Desvío (>15L)")
-                for _, f in alertas.iterrows():
-                    st.error(f"Móvil {f['Movil']} | Chofer: {f['Chofer']} | Desvío: {f['Desvio_Neto']} L")
+            # --- 2. RANKING DE EFICIENCIA (Eco-Driving) ---
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("🏆 Ranking de Choferes (Eco-Driving)")
+                # Evaluamos por menor Consumo y menor Desvío Neto
+                ranking = df_historico.groupby("Chofer").agg({
+                    "Consumo_L100": "mean",
+                    "Desvio_Neto": "mean"
+                }).sort_values(by=["Consumo_L100", "Desvio_Neto"]).head(5).reset_index()
+                
+                for i, r in ranking.iterrows():
+                    # Usamos medallas para los 3 primeros
+                    emoji = "🥇" if i==0 else "🥈" if i==1 else "🥉" if i==2 else "👤"
+                    st.write(f"{emoji} **{r['Chofer']}** | Promedio: {r['Consumo_L100']:.2f} L/100km")
 
-            # RANKING Y MARCAS
-            c_rank, c_marca = st.columns(2)
-            with c_rank:
-                st.subheader("🏆 Top 3 Eficientes")
-                rank = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
-                for i, r in rank.iterrows():
-                    st.success(f"{i+1}º - {r['Chofer']} ({r['Consumo_L100']:.2f} L/100km)")
-            with c_marca:
-                st.subheader("🚛 Consumo por Marca")
-                df_m = df_historico.groupby("Marca")["Consumo_L100"].mean().reset_index()
-                fig_m = px.pie(df_m, values='Consumo_L100', names='Marca', hole=0.4, template="plotly_dark")
-                st.plotly_chart(fig_m, use_container_width=True)
+            with col2:
+                st.subheader("📊 Desvío Neto por Operación")
+                # Gráfico para ver quién tiene desvíos sospechosos entre ticket y tablero
+                fig_desvio = px.scatter(df_historico, x="Fecha", y="Desvio_Neto", color="Chofer",
+                                       size="L_Ticket", hover_name="Movil", template="plotly_dark",
+                                       title="Diferencia Ticket vs Tablero (Litros)")
+                st.plotly_chart(fig_desvio, use_container_width=True)
 
-            st.subheader("📝 Historial")
+            # --- 3. MÉTRICAS GENERALES ---
+            st.markdown("---")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Gasto Total Acumulado", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
+            m2.metric("Litros Totales", f"{df_historico['L_Ticket'].sum():,.0f} L")
+            m3.metric("Promedio General Flota", f"{df_historico['Consumo_L100'].mean():,.2f} L/100")
+            
+            st.subheader("📝 Historial Reciente")
             st.dataframe(df_historico.iloc[::-1], use_container_width=True)
