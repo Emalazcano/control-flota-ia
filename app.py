@@ -23,25 +23,15 @@ def obtener_datos():
         return pd.DataFrame()
 
 @st.cache_data
-def obtener_listas_excel():
+def obtener_choferes_repo():
     archivo = "choferes.xlsx"
-    lista_c = ["Cargar Choferes"]
-    lista_m = [1] # Valor por defecto
     if os.path.exists(archivo):
         try:
             xl = pd.read_excel(archivo)
-            # Buscamos la columna de Choferes
-            col_c = "Chofer" if "Chofer" in xl.columns else None
-            if col_c:
-                lista_c = sorted(xl[col_c].dropna().unique().tolist())
-            
-            # Buscamos la columna de Móviles (asumiendo que se llama 'Movil' o 'Interno')
-            col_m = "Movil" if "Movil" in xl.columns else ("Interno" if "Interno" in xl.columns else None)
-            if col_m:
-                lista_m = sorted(xl[col_m].dropna().unique().tolist())
-        except:
-            pass
-    return lista_c, lista_m
+            col = "Chofer" if "Chofer" in xl.columns else xl.columns[0]
+            return sorted(xl[col].dropna().unique().tolist())
+        except: pass
+    return ["Error al cargar choferes.xlsx"]
 
 # --- 2. LOGIN ---
 if "auth" not in st.session_state:
@@ -59,9 +49,15 @@ if "auth" not in st.session_state:
             else: st.error("❌")
     st.stop()
 
-# --- 3. CARGA DE DATOS ---
+# --- 3. CARGA DE LISTAS ---
 df_h = obtener_datos()
-choferes, moviles = obtener_listas_excel()
+lista_choferes = obtener_choferes_repo()
+
+# Obtener trazas únicas ya registradas para evitar duplicados
+trazas_existentes = ["NUEVA TRAZA"]
+if not df_h.empty and "Traza" in df_h.columns:
+    trazas_db = sorted(df_h["Traza"].unique().tolist())
+    trazas_existentes.extend(trazas_db)
 
 # --- 4. INTERFAZ ---
 st.title("🚛 Inteligencia de Flota y Costos")
@@ -73,20 +69,26 @@ with tabs[0]:
         st.subheader("📝 Nuevo Registro de Carga")
         
         c_precio, _ = st.columns([1, 2])
-        precio_gasoil = c_precio.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0, step=10.0)
+        precio_gasoil = c_precio.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0)
         
         st.divider()
         
         f1, f2, f3 = st.columns(3)
         with f1:
             fecha = st.date_input("Fecha", datetime.now(), format="DD/MM/YYYY")
-            # CAMBIO AQUÍ: Ahora es un selectbox con los móviles del Excel
-            movil_sel = st.selectbox("Móvil", moviles)
-            chofer_sel = st.selectbox("Chofer", choferes)
+            movil = st.number_input("Móvil (1-100)", min_value=1, max_value=100) # Volvió a ser manual 1-100
+            chofer = st.selectbox("Chofer (desde Excel)", lista_choferes)
         with f2:
             marca = st.radio("Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            ruta = st.radio("Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            traza = st.text_input("Traza").upper()
+            ruta_tipo = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
+            
+            # Lógica de Trazas Delimitadas
+            traza_sel = st.selectbox("Seleccionar Traza Existente", trazas_existentes)
+            if traza_sel == "NUEVA TRAZA":
+                traza_final = st.text_input("Escribir Nueva Traza").upper()
+            else:
+                traza_final = traza_sel
+
         with f3:
             kmi = st.number_input("KM Inicial", min_value=0)
             kmf = st.number_input("KM Final", min_value=0)
@@ -94,55 +96,54 @@ with tabs[0]:
             ltab = st.number_input("Litros Tablero", min_value=0.0)
             lral = st.number_input("Litros Ralentí", min_value=0.0)
         
+        # Cálculos
         recorrido = kmf - kmi
-        consumo_estimado = (lt / recorrido * 100) if recorrido > 0 else 0
+        consumo = (lt / recorrido * 100) if recorrido > 0 else 0
         desvio = lt - (ltab + lral)
-        costo_v = lt * precio_gasoil
         
-        st.info(f"📊 **Calculadora:** Recorrido: {recorrido} km | Consumo: {consumo_estimado:.2f} L/100 | Costo: $ {costo_v:,.0f}")
+        st.info(f"📊 **Pre-visualización:** {recorrido} km | {consumo:.2f} L/100 | Costo: $ {lt * precio_gasoil:,.0f}")
         
-        if st.form_submit_button("💾 GUARDAR"):
-            if kmf > kmi and lt > 0:
+        if st.form_submit_button("💾 GUARDAR REGISTRO"):
+            if kmf > kmi and lt > 0 and traza_final != "":
                 nuevo = {
                     "Fecha": fecha.strftime('%d/%m/%Y'),
-                    "Chofer": chofer_sel, "Movil": movil_sel, "Marca": marca, "Ruta": ruta, 
-                    "Traza": traza, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": recorrido, 
+                    "Chofer": chofer, "Movil": movil, "Marca": marca, "Ruta": ruta_tipo, 
+                    "Traza": traza_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": recorrido, 
                     "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Desvio_Neto": round(desvio, 2), "Consumo_L100": round(consumo_estimado, 2),
-                    "Costo_Total_ARS": round(costo_v, 2), "Costo_Ralenti_ARS": round(lral * precio_gasoil, 2)
+                    "Desvio_Neto": round(desvio, 2), "Consumo_L100": round(consumo, 2),
+                    "Costo_Total_ARS": round(lt * precio_gasoil, 2), 
+                    "Costo_Ralenti_ARS": round(lral * precio_gasoil, 2)
                 }
                 df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success("✅ Guardado")
+                st.success("✅ Registro guardado correctamente.")
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Error en KM o Litros.")
+                st.error("Revisá que los KM sean correctos y que la Traza no esté vacía.")
 
 # --- PESTAÑA IA ---
 with tabs[1]:
     if not df_h.empty:
         m1, m2, m3 = st.columns(3)
-        m1.metric("Gasto Acumulado", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
-        m2.metric("Pérdida Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
-        m3.metric("Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
+        m1.metric("Gasto Total", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
+        m2.metric("Gasto Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
+        m3.metric("Promedio Flota", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
         
         st.divider()
         g1, g2 = st.columns(2)
         with g1:
-            st.subheader("🏆 Eco-Driving")
+            st.subheader("🏆 Mejores Choferes")
             rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
             for i, r in rank.iterrows():
-                st.write(f"{['🥇','🥈','🥉','👤','👤'][i]} **{r['Chofer']}**: {r['Consumo_L100']:.2f} L/100")
+                st.write(f"{['🥇','🥈','🥉','👤','👤'][i]} **{r['Chofer']}**: {r['Consumo_L100']:.2f}")
         with g2:
-            st.subheader("🚨 Desvíos (>50L)")
+            st.subheader("🚨 Alertas de Desvío")
             alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
             for _, r in alertas.iterrows():
-                val = r['Desvio_Neto']
-                if val > 50: st.error(f"**{r['Chofer']}**: {val:.1f} L")
-                elif val < -50: st.warning(f"**{r['Chofer']}**: {val:.1f} L")
-                else: st.write(f"**{r['Chofer']}**: {val:.1f} L (OK)")
-    else: st.info("Sin datos.")
+                if abs(r['Desvio_Neto']) > 50:
+                    st.error(f"⚠️ **{r['Chofer']}**: {r['Desvio_Neto']:.1f} L")
+    else: st.info("Sin datos para analizar.")
 
 # --- PESTAÑA HISTORIAL ---
 with tabs[2]:
