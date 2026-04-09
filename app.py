@@ -4,7 +4,6 @@ import pandas as pd
 from datetime import datetime
 import time
 import plotly.express as px
-from sklearn.ensemble import IsolationForest
 from fpdf import FPDF
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
@@ -18,12 +17,15 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # --- 3. DEFINICIÓN DE FUNCIONES ---
 
 def obtener_datos():
+    """Lee datos de Google Sheets sin guardar caché vieja."""
     try:
+        # ttl=0 evita que aparezcan datos que ya borraste en el Excel
         return conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
     except:
         return pd.DataFrame()
 
 def generar_comprobante_pdf(datos):
+    """Genera el recibo de carga en PDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_fill_color(230, 230, 230)
@@ -46,6 +48,7 @@ def generar_comprobante_pdf(datos):
     return pdf.output()
 
 def check_password():
+    """Sistema de seguridad por usuario."""
     if "password_correct" not in st.session_state:
         st.title("🔐 Acceso Sistema de Flota")
         st.text_input("Usuario", key="username", placeholder="Ej: ema_admin")
@@ -66,11 +69,14 @@ def check_password():
 # --- 4. PROGRAMA PRINCIPAL ---
 
 if check_password():
+    # Variables de sesión protegidas
     user_logueado = st.session_state.get("username", "ADMIN").upper()
     role = st.session_state.get("user_role", "operador")
+    
+    # Leemos datos frescos
     df_historico = obtener_datos()
 
-    # SIDEBAR
+    # --- SIDEBAR (Solo una vez aquí adentro para evitar duplicados) ---
     st.sidebar.success(f"👤 {user_logueado}")
     precio_litro = st.sidebar.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0)
     
@@ -81,57 +87,59 @@ if check_password():
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
+    # --- LÓGICA DE CONTENIDO ---
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
         
-        # --- LÓGICA DE CHOFERES DINÁMICOS ---
+        # 1. Lista de choferes dinámica desde el historial
         lista_choferes = []
         if not df_historico.empty and "Chofer" in df_historico.columns:
-            # Obtenemos nombres únicos y quitamos vacíos
             lista_choferes = sorted(df_historico["Chofer"].dropna().unique().tolist())
-        
-        # Agregamos opción para ingresar uno nuevo si no está en la lista
         lista_choferes.append("+ Agregar Nuevo Chofer")
 
         movil_sel = st.selectbox("Móvil", list(range(1, 101)))
         
+        # 2. Sugerencia automática de KM
         km_sugerido = 0
         if not df_historico.empty and "Movil" in df_historico.columns:
             ultimo = df_historico[df_historico["Movil"].astype(str) == str(movil_sel)]
             if not ultimo.empty:
-                km_sugerido = ultimo["KM_Fin"].iloc[-1]
-                st.info(f"💡 KM Inicial sugerido: {km_sugerido}")
+                try:
+                    km_sugerido = ultimo["KM_Fin"].iloc[-1]
+                    st.info(f"💡 KM Inicial sugerido para el Móvil {movil_sel}: {km_sugerido}")
+                except: pass
 
-        with st.form("form_carga"):
+        # 3. Formulario de carga
+        with st.form("form_carga", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
+                # Fecha con formato visual DD/MM/YYYY
                 fecha = st.date_input("Fecha de Carga", datetime.now(), format="DD/MM/YYYY")
                 
-                # Selector de Chofer
-                chofer_sel = st.selectbox("Chofer", lista_choferes)
-                if chofer_sel == "+ Agregar Nuevo Chofer":
-                    chofer_final = st.text_input("Escriba el nombre del nuevo chofer")
-                else:
-                    chofer_final = chofer_sel
-
+                chofer_sel = st.selectbox("Seleccionar Chofer", lista_choferes)
+                chofer_nuevo = st.text_input("O escribir nombre de Chofer Nuevo:")
+                chofer_final = chofer_nuevo if chofer_nuevo else chofer_sel
+                
                 marca = st.radio("Marca", ["SCANIA", "MERCEDES BENZ"])
                 ruta = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
                 traza = st.text_input("Traza (Origen - Destino)")
+            
             with col2:
                 km_ini = st.number_input("KM Inicial", min_value=0, value=int(km_sugerido))
                 km_fin = st.number_input("KM Final", min_value=0)
-                l_ticket = st.number_input("Litros Ticket", min_value=0.0)
+                l_ticket = st.number_input("Litros Ticket (Carga Real)", min_value=0.0)
                 l_tablero = st.number_input("Litros Tablero", min_value=0.0)
-                l_ralenti = st.number_input("Litros Ralentí", min_value=0.0)
+                l_ralenti = st.number_input("Litros Ralentí (Vigía)", min_value=0.0)
             
             btn_guardar = st.form_submit_button("💾 GUARDAR Y GENERAR PDF")
 
         if btn_guardar:
-            if not chofer_final:
-                st.error("❌ Por favor, ingrese el nombre del chofer.")
+            if not chofer_final or chofer_final == "+ Agregar Nuevo Chofer":
+                st.error("❌ Por favor, ingresá el nombre del chofer.")
             elif km_fin <= km_ini:
-                st.error("❌ El KM Final debe ser mayor.")
+                st.error("❌ El KM Final debe ser mayor al Inicial.")
             else:
+                # Cálculos automáticos
                 km_recorr = km_fin - km_ini
                 consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
                 costo_total = l_ticket * precio_litro
@@ -150,31 +158,46 @@ if check_password():
                 }
                 
                 try:
+                    # Guardamos en Google Sheets
                     df_final = pd.concat([df_historico, pd.DataFrame([datos_viaje])], ignore_index=True)
                     conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                    st.success("✅ Registro guardado.")
+                    
+                    st.success("✅ Registro guardado exitosamente.")
+                    
+                    # Generar y ofrecer PDF
                     pdf_bytes = generar_comprobante_pdf(datos_viaje)
-                    st.download_button(label="📥 DESCARGAR PDF", data=bytes(pdf_bytes), file_name=f"Viaje_M{movil_sel}.pdf")
-                    time.sleep(1)
-                    st.rerun() # Recargamos para que el nuevo chofer aparezca en la lista
+                    st.download_button(
+                        label="📥 DESCARGAR COMPROBANTE PDF",
+                        data=bytes(pdf_bytes),
+                        file_name=f"Viaje_M{movil_sel}_{fecha_arg.replace('/','-')}.pdf",
+                        mime="application/pdf"
+                    )
+                    time.sleep(2)
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Error al guardar: {e}")
 
     elif menu == "Análisis IA & Dashboard":
-        # (El resto del código del dashboard se mantiene igual)
         st.header("📊 Inteligencia de Flota y Costos")
+        
         if not df_historico.empty:
+            # Asegurar que existan las columnas para los gráficos
             for col in ["Costo_Ralenti_ARS", "Costo_Total_ARS", "L_Ticket"]:
                 if col not in df_historico.columns: df_historico[col] = 0
             
-            col_m1, col_m2, col_m3 = st.columns(3)
-            with col_m1: st.metric("Gasto Total", f"${df_historico['Costo_Total_ARS'].sum():,.0f}")
-            with col_m2: st.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
-            with col_m3: st.metric("Pérdida Ralentí", f"${df_historico['Costo_Ralenti_ARS'].sum():,.0f}")
+            # Métricas principales
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Gasto Total", f"${df_historico['Costo_Total_ARS'].sum():,.0f}")
+            c2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
+            c3.metric("Pérdida Ralentí", f"${df_historico['Costo_Ralenti_ARS'].sum():,.0f}", delta_color="inverse")
 
-            st.subheader("📉 Ralentí por Chofer")
+            # Gráfico de Ralentí
+            st.subheader("📉 Pesos perdidos por ralentí por chofer")
             fig_ral = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", template="plotly_dark")
             st.plotly_chart(fig_ral, use_container_width=True)
 
+            # Historial visual
             st.subheader("📝 Historial Completo")
             st.dataframe(df_historico.iloc[::-1], use_container_width=True)
+        else:
+            st.info("No hay datos cargados en el sistema.")
