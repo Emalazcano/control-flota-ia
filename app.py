@@ -51,6 +51,8 @@ def obtener_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
+        # Limpieza de nombres de columnas por si hay espacios
+        df.columns = df.columns.str.strip()
         num_cols = ["KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
@@ -73,23 +75,32 @@ with tabs[0]:
     cp, _ = st.columns([1, 3])
     st.session_state["precio_gasoil"] = cp.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
     
+    # --- BUSQUEDA DE KM FUERA DEL FORMULARIO PARA REACTIVIDAD ---
+    # Colocamos el selector de móvil fuera del form o usamos st.rerun para que el KM cargue al cambiar el móvil
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("##### 🚛 Vehículo")
+        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+        
+        # Lógica robusta de búsqueda
+        km_sugerido = 0.0
+        if not df_h.empty:
+            # Forzamos a string para comparar peras con peras
+            ult_reg = df_h[df_h["Movil"].astype(str) == str(movil_sel)]
+            if not ult_reg.empty:
+                # Ordenamos por fecha por si el historial está desordenado
+                ult_reg = ult_reg.sort_values("Fecha")
+                km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
+
     with st.form("registro_form"):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown("##### 🚛 Vehículo")
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-            
-            # --- LÓGICA KM AUTOMÁTICO ---
-            km_sugerido = 0.0
-            if not df_h.empty:
-                ult_reg = df_h[df_h["Movil"] == movil_sel]
-                if not ult_reg.empty:
-                    km_sugerido = ult_reg.iloc[-1]["KM_Fin"]
-            
+        # Re-organizamos visualmente para que coincida con lo anterior
+        c1, c2, c3 = st.columns(3)
+        with c1:
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
             
-        with col2:
+        with c2:
             st.markdown("##### 📍 Ruta")
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
             traza_existente = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
@@ -97,14 +108,16 @@ with tabs[0]:
             nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza == "➕ NUEVA" and nt != "") else traza
             
-        with col3:
+        with c3:
             st.markdown("##### ⛽ Consumo")
-            kmi = st.number_input("🛣️ KM Inicial", value=float(km_sugerido))
-            kmf = st.number_input("🏁 KM Final")
-            lt = st.number_input("⛽ Litros Ticket")
-            ltab = st.number_input("📟 Litros Tablero")
-            lral = st.number_input("⏳ Litros Ralentí")
+            # El valor inicial ahora es km_sugerido
+            kmi = st.number_input("🛣️ KM Inicial", value=km_sugerido, step=1.0)
+            kmf = st.number_input("🏁 KM Final", step=1.0)
+            lt = st.number_input("⛽ Litros Ticket", step=0.1)
+            ltab = st.number_input("📟 Litros Tablero", step=0.1)
+            lral = st.number_input("⏳ Litros Ralentí", step=0.1)
 
+        # Cálculos en tiempo real
         distancia = kmf - kmi
         consumo = (lt / distancia * 100) if distancia > 0 else 0
         costo_t = lt * st.session_state["precio_gasoil"]
@@ -112,33 +125,44 @@ with tabs[0]:
         
         if distancia > 0:
             st.divider()
-            c1, c2, c3 = st.columns(3)
-            c1.info(f"📏 Recorrido: **{distancia} KM**")
-            c2.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-            c3.info(f"💰 Costo Viaje: **${costo_t:,.0f}**")
+            res1, res2, res3 = st.columns(3)
+            res1.info(f"📏 Recorrido: **{distancia:,.1f} KM**")
+            res2.info(f"📊 Consumo: **{consumo:.1f} L/100**")
+            res3.info(f"💰 Costo Viaje: **${costo_t:,.0f}**")
 
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos.")
+                st.error("⚠️ Datos inválidos. Verifique KMs y Traza.")
             else:
                 nuevo_reg = {
-                    "Fecha": datetime.now().strftime('%Y-%m-%d'), "Movil": movil_sel,
-                    "Chofer": chofer, "Marca": marca, "Ruta": ruta_tipo, "Traza": t_final,
-                    "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": distancia, "L_Ticket": lt,
-                    "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round(consumo, 2),
-                    "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(desvio_n, 2)
+                    "Fecha": datetime.now().strftime('%Y-%m-%d'), 
+                    "Movil": movil_sel,
+                    "Chofer": chofer, 
+                    "Marca": marca, 
+                    "Ruta": ruta_tipo, 
+                    "Traza": t_final,
+                    "KM_Ini": kmi, 
+                    "KM_Fin": kmf, 
+                    "KM_Recorr": distancia, 
+                    "L_Ticket": lt,
+                    "L_Tablero": ltab, 
+                    "L_Ralenti": lral, 
+                    "Consumo_L100": round(consumo, 2),
+                    "Costo_Total_ARS": round(costo_t, 2), 
+                    "Desvio_Neto": round(desvio_n, 2)
                 }
                 df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 conn.update(spreadsheet=URL, data=df_up)
-                st.success("✅ ¡Registro guardado!")
+                st.success("✅ ¡Registro guardado exitosamente!")
                 time.sleep(1)
                 st.rerun()
 
 # --- TAB 2: OJO DE HALCÓN ---
 with tabs[1]:
     if not df_h.empty:
+        # Asegurar limpieza de fechas antes de filtrar
         df_h = df_h.dropna(subset=['Fecha'])
         st.markdown("### 🔍 Filtros de Análisis")
         col_f1, _ = st.columns([1, 2])
@@ -148,17 +172,16 @@ with tabs[1]:
             mes_sel = st.selectbox("📅 Seleccionar Mes/Año", meses_disp)
         
         df_view = df_h[df_h['Mes_Año'] == mes_sel].copy() if mes_sel != "Todos" else df_h.copy()
+        
         st.divider()
-
-        # MÉTRICAS
-        st.markdown(f"### 🦅 Periodo: {mes_sel}")
+        st.markdown(f"### 🦅 Resumen Mensual: {mes_sel}")
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_view["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_view["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_view["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
         st.divider()
-        st.markdown("### 🏆 Cuadro de Honor")
+        st.markdown("### 🏆 Ranking Eco-Driving (Top 5)")
         top_5 = df_view.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         iconos = ["🥇", "🥈", "🥉", "👤", "👤"]
@@ -167,7 +190,7 @@ with tabs[1]:
                 st.markdown(f'<div class="metric-card"><div style="font-size:40px;">{iconos[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
         st.divider()
-        st.markdown("### ⚠️ Control de Desvíos (>50L)")
+        st.markdown("### ⚠️ Alertas de Desvío (>50L)")
         df_desv = df_view.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         ca1, ca2 = st.columns(2)
         for i, row in df_desv.iterrows():
@@ -180,4 +203,4 @@ with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
         st.dataframe(df_h.sort_values("Fecha", ascending=False), use_container_width=True)
-    else: st.info("No hay datos.")
+    else: st.info("No hay datos cargados en el historial.")
