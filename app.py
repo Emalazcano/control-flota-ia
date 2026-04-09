@@ -24,7 +24,7 @@ def obtener_datos_sheets():
 
 @st.cache_data
 def obtener_choferes_locales():
-    archivo = "choferes.xlsx" # Archivo en tu repositorio
+    archivo = "choferes.xlsx"
     if os.path.exists(archivo):
         try:
             df = pd.read_excel(archivo)
@@ -65,7 +65,7 @@ if check_password():
     df_historico = obtener_datos_sheets()
     lista_choferes = obtener_choferes_locales()
     
-    # Unificación de trazas [extraídas del historial en Sheets]
+    # Unificación de trazas
     lista_trazas = []
     if not df_historico.empty and "Traza" in df_historico.columns:
         trazas_sucias = df_historico["Traza"].dropna().astype(str).str.strip().str.upper()
@@ -87,85 +87,52 @@ if check_password():
                 chofer_sel = st.selectbox("Chofer", lista_choferes)
                 marca = st.radio("Marca", ["SCANIA", "MERCEDES BENZ"])
                 ruta_tipo = st.radio("Ruta", ["Llano", "Alta Montaña"])
-                
                 traza_sel = st.selectbox("Seleccionar Traza", lista_trazas)
-                traza_nueva = st.text_input("O nueva Traza (Mayúsculas)")
+                traza_nueva = st.text_input("O nueva Traza")
                 traza_final = traza_nueva.strip().upper() if traza_nueva else (traza_sel if traza_sel != "+ Agregar Nueva Traza" else "")
-
             with col2:
                 km_ini = st.number_input("KM Inicial", min_value=0)
                 km_fin = st.number_input("KM Final", min_value=0)
                 l_ticket = st.number_input("Litros Ticket", min_value=0.0)
                 l_tablero = st.number_input("Litros Tablero", min_value=0.0)
                 l_ralenti = st.number_input("Litros Ralentí (Vigía)", min_value=0.0)
-            
             btn_guardar = st.form_submit_button("💾 GUARDAR")
 
         if btn_guardar:
             if km_fin <= km_ini:
                 st.error("❌ El KM final debe ser mayor.")
             else:
-                # CÁLCULOS CRÍTICOS
                 km_recorr = km_fin - km_ini
                 consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
                 desvio = l_ticket - (l_tablero + l_ralenti)
-                
                 datos_viaje = {
-                    "Fecha": fecha.strftime('%d/%m/%Y'),
-                    "Chofer": chofer_sel,
-                    "Movil": movil_sel,
-                    "Marca": marca,
-                    "Ruta": ruta_tipo,
-                    "Traza": traza_final,
-                    "KM_Ini": km_ini,
-                    "KM_Fin": km_fin,
-                    "KM_Recorr": km_recorr,
-                    "L_Ticket": l_ticket,
-                    "L_Tablero": l_tablero,        # Se asegura el envío
-                    "L_Ralenti": l_ralenti,        # Se asegura el envío
-                    "Desvio_Neto": round(desvio, 2), # Se asegura el envío
-                    "Consumo_L100": round(consumo, 2),
+                    "Fecha": fecha.strftime('%d/%m/%Y'), "Chofer": chofer_sel, "Movil": movil_sel,
+                    "Marca": marca, "Ruta": ruta_tipo, "Traza": traza_final,
+                    "KM_Ini": km_ini, "KM_Fin": km_fin, "KM_Recorr": km_recorr,
+                    "L_Ticket": l_ticket, "L_Tablero": l_tablero, "L_Ralenti": l_ralenti,
+                    "Desvio_Neto": round(desvio, 2), "Consumo_L100": round(consumo, 2),
                     "Costo_Total_ARS": round(l_ticket * precio_litro, 2),
                     "Costo_Ralenti_ARS": round(l_ralenti * precio_litro, 2)
                 }
-                
                 try:
                     df_final = pd.concat([df_historico, pd.DataFrame([datos_viaje])], ignore_index=True)
                     conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                    st.success("✅ Guardado exitoso.")
-                    st.download_button("📥 PDF", data=bytes(generar_comprobante_pdf(datos_viaje)), file_name="Viaje.pdf")
+                    st.success("✅ Guardado")
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
 
     elif menu == "Análisis IA & Dashboard":
-        st.header("📊 Inteligencia de Flota")
-        if not df_historico.empty:
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Gasto Total", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
-            m2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
-            m3.metric("Pérdida Ralentí", f"$ {df_historico['Costo_Ralenti_ARS'].sum():,.0f}")
-
-            st.subheader("📉 Ralentí por Chofer")
-            fig = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", template="plotly_dark")
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.subheader("📝 Historial Completo")
-            st.dataframe(df_historico.iloc[::-1], use_container_width=True)
-     elif menu == "Análisis IA & Dashboard":
-        st.header("📊 Inteligencia de Flota y Control de Costos")
-        
+        st.header("📊 Inteligencia de Flota y Control")
         if df_historico.empty:
-            st.info("Aún no hay datos. Registrá un viaje para activar el análisis.")
-     else:
-            # 1. Limpieza y preparación de datos numéricos
-            cols_num = ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto", "L_Tablero"]
-            for c in cols_num:
-                if c in df_historico.columns:
-                    df_historico[c] = pd.to_numeric(df_historico[c], errors='coerce').fillna(0)
+            st.info("No hay datos para analizar.")
+        else:
+            # Preparación de datos
+            for c in ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto"]:
+                df_historico[c] = pd.to_numeric(df_historico[c], errors='coerce').fillna(0)
 
-            # 2. MÉTRICAS PRINCIPALES
+            # MÉTRICAS
             m1, m2, m3 = st.columns(3)
             m1.metric("Gasto Total", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
             m2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
@@ -173,49 +140,25 @@ if check_password():
 
             st.markdown("---")
 
-            # 3. ALERTAS DE DESVÍO INTELIGENTES (> 15 Litros)
-            # Filtramos los desvíos importantes (en valor absoluto para detectar faltantes o excesos)
-            alertas = df_historico[df_historico["Desvio_Neto"].abs() > 15].tail(5) # Mostramos las últimas 5
-            
+            # ALERTAS
+            alertas = df_historico[df_historico["Desvio_Neto"].abs() > 15].tail(5)
             if not alertas.empty:
-                st.subheader("⚠️ Alertas de Desvío Crítico (>15L)")
-                for _, fila in alertas.iterrows():
-                    st.error(f"**Móvil {fila['Movil']}** | Chofer: {fila['Chofer']} | **Desvío: {fila['Desvio_Neto']} L** | Fecha: {fila['Fecha']}")
-                st.markdown("---")
+                st.subheader("⚠️ Alertas de Desvío (>15L)")
+                for _, f in alertas.iterrows():
+                    st.error(f"Móvil {f['Movil']} | Chofer: {f['Chofer']} | Desvío: {f['Desvio_Neto']} L")
 
-            # 4. RANKING DE EFICIENCIA Y COMPARATIVA DE MARCAS
-            col_rank, col_marca = st.columns(2)
+            # RANKING Y MARCAS
+            c_rank, c_marca = st.columns(2)
+            with c_rank:
+                st.subheader("🏆 Top 3 Eficientes")
+                rank = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
+                for i, r in rank.iterrows():
+                    st.success(f"{i+1}º - {r['Chofer']} ({r['Consumo_L100']:.2f} L/100km)")
+            with c_marca:
+                st.subheader("🚛 Consumo por Marca")
+                df_m = df_historico.groupby("Marca")["Consumo_L100"].mean().reset_index()
+                fig_m = px.pie(df_m, values='Consumo_L100', names='Marca', hole=0.4, template="plotly_dark")
+                st.plotly_chart(fig_m, use_container_width=True)
 
-            with col_rank:
-                st.subheader("🏆 Top 3 Choferes Eficientes")
-                # El más eficiente es el que tiene menor consumo promedio L/100km
-                ranking = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
-                for i, row in ranking.iterrows():
-                    st.success(f"{i+1}º - {row['Chofer']} ({row['Consumo_L100']:.2f} L/100km)")
-
-            with col_marca:
-                st.subheader("🚛 Consumo Promedio por Marca")
-                df_marca = df_historico.groupby("Marca")["Consumo_L100"].mean().reset_index()
-                fig_marca = px.pie(df_marca, values='Consumo_L100', names='Marca', 
-                                   color='Marca', color_discrete_map={'SCANIA':'#FF4B4B', 'MERCEDES BENZ':'#0068C9'},
-                                   hole=0.4, template="plotly_dark")
-                st.plotly_chart(fig_marca, use_container_width=True)
-
-            # 5. GRÁFICOS DETALLADOS
-            st.markdown("---")
-            g1, g2 = st.columns(2)
-            
-            with g1:
-                st.subheader("📉 Costo de Ralentí por Chofer")
-                fig_ral = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", template="plotly_dark")
-                st.plotly_chart(fig_ral, use_container_width=True)
-                
-            with g2:
-                st.subheader("📍 Eficiencia por Traza (L/100km)")
-                df_traza = df_historico.groupby("Traza")["Consumo_L100"].mean().reset_index()
-                fig_traza = px.bar(df_traza, x="Traza", y="Consumo_L100", color="Traza", template="plotly_dark")
-                st.plotly_chart(fig_traza, use_container_width=True)
-
-            # 6. HISTORIAL COMPLETO
-            st.subheader("📝 Registro Histórico")
-            st.dataframe(df_historico.iloc[::-1], use_container_width=True)       
+            st.subheader("📝 Historial")
+            st.dataframe(df_historico.iloc[::-1], use_container_width=True)
