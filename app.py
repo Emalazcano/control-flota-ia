@@ -7,14 +7,14 @@ import plotly.express as px
 from fpdf import FPDF
 import os
 
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 
-# --- 2. CONEXIÓN A GOOGLE SHEETS ---
+# Conexión a Google Sheets
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 3. DEFINICIÓN DE FUNCIONES ---
+# --- 2. FUNCIONES ---
 
 def obtener_datos_sheets():
     try:
@@ -24,7 +24,7 @@ def obtener_datos_sheets():
 
 @st.cache_data
 def obtener_choferes_locales():
-    archivo = "choferes.xlsx"
+    archivo = "choferes.xlsx" # Archivo en tu repositorio
     if os.path.exists(archivo):
         try:
             df = pd.read_excel(archivo)
@@ -53,50 +53,43 @@ def check_password():
         if st.button("Ingresar"):
             if u == "ema_admin" and p == "jujuy2024":
                 st.session_state["password_correct"] = True
-                st.session_state["user_role"] = "admin"
                 st.rerun()
             else:
-                st.error("Usuario o contraseña incorrectos")
+                st.error("Credenciales incorrectas")
         return False
     return True
 
-# --- 4. PROGRAMA PRINCIPAL ---
+# --- 3. PROGRAMA PRINCIPAL ---
 
 if check_password():
     df_historico = obtener_datos_sheets()
     lista_choferes = obtener_choferes_locales()
     
-    # --- LÓGICA DE UNIFICACIÓN DE TRAZAS ---
+    # Unificación de trazas [extraídas del historial en Sheets]
     lista_trazas = []
     if not df_historico.empty and "Traza" in df_historico.columns:
-        # Limpiamos espacios y pasamos a mayúsculas para unificar
         trazas_sucias = df_historico["Traza"].dropna().astype(str).str.strip().str.upper()
         lista_trazas = sorted(trazas_sucias.unique().tolist())
-    
     lista_trazas.append("+ Agregar Nueva Traza")
 
-    # SIDEBAR
-    st.sidebar.success(f"👤 ADMIN")
-    precio_litro = st.sidebar.number_input("Precio Litro ($)", value=1100.0)
+    st.sidebar.success("👤 SESIÓN INICIADA")
+    precio_litro = st.sidebar.number_input("Precio Litro Gasoil ($)", value=1100.0)
     menu = st.sidebar.selectbox("Menú", ["Cargar Combustible", "Análisis IA & Dashboard"])
 
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
-        
         movil_sel = st.selectbox("Móvil", list(range(1, 101)))
         
         with st.form("form_carga", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
-                fecha = st.date_input("Fecha", datetime.now(), format="DD/MM/YYYY")
+                fecha = st.date_input("Fecha", datetime.now())
                 chofer_sel = st.selectbox("Chofer", lista_choferes)
                 marca = st.radio("Marca", ["SCANIA", "MERCEDES BENZ"])
-                ruta_tipo = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
+                ruta_tipo = st.radio("Ruta", ["Llano", "Alta Montaña"])
                 
-                # --- SELECTOR DE TRAZA UNIFICADA ---
-                traza_sel = st.selectbox("Seleccionar Traza Existente", lista_trazas)
-                traza_nueva = st.text_input("O escribir Traza Nueva (Ej: SSJJ-OLAR-SSJJ)")
-                # Si escribió algo en Traza Nueva, usamos eso. Si no, lo del selector.
+                traza_sel = st.selectbox("Seleccionar Traza", lista_trazas)
+                traza_nueva = st.text_input("O nueva Traza (Mayúsculas)")
                 traza_final = traza_nueva.strip().upper() if traza_nueva else (traza_sel if traza_sel != "+ Agregar Nueva Traza" else "")
 
             with col2:
@@ -104,22 +97,34 @@ if check_password():
                 km_fin = st.number_input("KM Final", min_value=0)
                 l_ticket = st.number_input("Litros Ticket", min_value=0.0)
                 l_tablero = st.number_input("Litros Tablero", min_value=0.0)
-                l_ralenti = st.number_input("Litros Ralentí", min_value=0.0)
+                l_ralenti = st.number_input("Litros Ralentí (Vigía)", min_value=0.0)
             
             btn_guardar = st.form_submit_button("💾 GUARDAR")
 
         if btn_guardar:
-            if not traza_final:
-                st.error("❌ Por favor, definí una Traza.")
-            elif km_fin <= km_ini:
-                st.error("❌ KM Final debe ser mayor.")
+            if km_fin <= km_ini:
+                st.error("❌ El KM final debe ser mayor.")
             else:
+                # CÁLCULOS CRÍTICOS
                 km_recorr = km_fin - km_ini
+                consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
+                desvio = l_ticket - (l_tablero + l_ralenti)
+                
                 datos_viaje = {
-                    "Fecha": fecha.strftime('%d/%m/%Y'), "Chofer": chofer_sel, "Movil": movil_sel,
-                    "Marca": marca, "Ruta": ruta_tipo, "Traza": traza_final,
-                    "KM_Ini": km_ini, "KM_Fin": km_fin, "KM_Recorr": km_recorr, 
-                    "L_Ticket": l_ticket, "Consumo_L100": round((l_ticket/km_recorr*100 if km_recorr>0 else 0), 2), 
+                    "Fecha": fecha.strftime('%d/%m/%Y'),
+                    "Chofer": chofer_sel,
+                    "Movil": movil_sel,
+                    "Marca": marca,
+                    "Ruta": ruta_tipo,
+                    "Traza": traza_final,
+                    "KM_Ini": km_ini,
+                    "KM_Fin": km_fin,
+                    "KM_Recorr": km_recorr,
+                    "L_Ticket": l_ticket,
+                    "L_Tablero": l_tablero,        # Se asegura el envío
+                    "L_Ralenti": l_ralenti,        # Se asegura el envío
+                    "Desvio_Neto": round(desvio, 2), # Se asegura el envío
+                    "Consumo_L100": round(consumo, 2),
                     "Costo_Total_ARS": round(l_ticket * precio_litro, 2),
                     "Costo_Ralenti_ARS": round(l_ralenti * precio_litro, 2)
                 }
@@ -127,8 +132,8 @@ if check_password():
                 try:
                     df_final = pd.concat([df_historico, pd.DataFrame([datos_viaje])], ignore_index=True)
                     conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                    st.success(f"✅ Guardado. Traza '{traza_final}' registrada.")
-                    st.download_button("📥 Descargar PDF", data=bytes(generar_comprobante_pdf(datos_viaje)), file_name="Viaje.pdf")
+                    st.success("✅ Guardado exitoso.")
+                    st.download_button("📥 PDF", data=bytes(generar_comprobante_pdf(datos_viaje)), file_name="Viaje.pdf")
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
@@ -137,18 +142,14 @@ if check_password():
     elif menu == "Análisis IA & Dashboard":
         st.header("📊 Inteligencia de Flota")
         if not df_historico.empty:
-            # Métricas
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Gasto Total", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
-            c2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
-            c3.metric("Pérdida Ralentí", f"$ {df_historico['Costo_Ralenti_ARS'].sum():,.0f}")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Gasto Total", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
+            m2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
+            m3.metric("Pérdida Ralentí", f"$ {df_historico['Costo_Ralenti_ARS'].sum():,.0f}")
 
-            # Gráfico unificado por traza
-            st.subheader("⛽ Consumo Promedio por Traza")
-            # Agrupamos por traza para ver cuál consume más
-            df_traza = df_historico.groupby("Traza")["Consumo_L100"].mean().reset_index()
-            fig = px.bar(df_traza, x="Traza", y="Consumo_L100", template="plotly_dark", color="Traza")
+            st.subheader("📉 Ralentí por Chofer")
+            fig = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", template="plotly_dark")
             st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("📝 Historial")
+            st.subheader("📝 Historial Completo")
             st.dataframe(df_historico.iloc[::-1], use_container_width=True)
