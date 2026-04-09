@@ -21,9 +21,8 @@ df_choferes = pd.read_excel("choferes.xlsx") if "choferes.xlsx" else pd.DataFram
 df_historico = obtener_datos()
 
 # --- INTERFAZ ---
-st.title("🚛 Sistema de Flota con Inteligencia Artificial")
-
-menu = st.sidebar.selectbox("Menú", ["Cargar Combustible", "Análisis IA & Dashboard"])
+st.sidebar.title("Navegación")
+menu = st.sidebar.selectbox("Menú", ["Cargar Combustible", "Calculadora de Viaje (IA)", "Análisis IA & Dashboard"])
 
 if menu == "Cargar Combustible":
     st.header("⛽ Registro de Carga")
@@ -67,52 +66,69 @@ if menu == "Cargar Combustible":
             try:
                 df_final = pd.concat([df_historico, nuevo], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                st.success("✅ ¡Sincronizado!")
-                time.sleep(1); st.rerun()
+                st.success("✅ ¡Sincronizado!"); time.sleep(1); st.rerun()
             except Exception as e:
                 if "200" in str(e): st.success("✅ Guardado"); time.sleep(1); st.rerun()
                 else: st.error(f"Error: {e}")
+
+elif menu == "Calculadora de Viaje (IA)":
+    st.header("🧮 Calculadora de Consumo Predictivo")
+    st.write("Usa esta herramienta para estimar cuánto combustible debería consumir un viaje.")
+
+    if not df_historico.empty:
+        col1, col2 = st.columns(2)
+        with col1:
+            c_marca = st.selectbox("Marca del Camión", ["Scania", "Mercedes"])
+            c_ruta = st.selectbox("Tipo de Ruta", ["Llano", "Alta Montaña"])
+            c_distancia = st.number_input("Distancia a recorrer (KM)", min_value=1, value=100)
+        
+        # Lógica de Predicción Simple basada en promedios históricos
+        filtro = df_historico[(df_historico['Marca'] == c_marca) & (df_historico['Ruta'] == c_ruta)]
+        
+        if not filtro.empty:
+            consumo_medio = filtro['Consumo_L100'].mean()
+            litros_estimados = (consumo_medio * c_distancia) / 100
+            
+            with col2:
+                st.metric("Consumo Estimado", f"{round(litros_estimados, 1)} Litros")
+                st.metric("Rendimiento Objetivo", f"{round(consumo_medio, 2)} L/100km")
+                
+            st.info(f"💡 Esta predicción se basa en {len(filtro)} viajes anteriores similares.")
+            
+            # Comparativa visual
+            st.subheader("Rendimiento histórico para esta configuración")
+            fig_hist = px.histogram(filtro, x="Consumo_L100", nbins=10, title="Frecuencia de consumos históricos")
+            st.plotly_chart(fig_hist, use_container_width=True)
+        else:
+            st.warning("Aún no hay suficientes datos para esta combinación de Marca y Ruta.")
+    else:
+        st.info("Carga datos para activar la calculadora.")
 
 elif menu == "Análisis IA & Dashboard":
     st.header("📊 Inteligencia de Flota")
     
     if not df_historico.empty:
-        # --- 1. DETECCIÓN DE ANOMALÍAS CON IA ---
-        st.subheader("🚨 Alertas de la IA (Detección de Anomalías)")
-        if len(df_historico) > 5: # Necesita algunos datos para aprender
-            # Preparamos datos para la IA
+        # --- DETECCIÓN DE ANOMALÍAS ---
+        st.subheader("🚨 Alertas de la IA")
+        if len(df_historico) > 5:
             data_ia = df_historico[['Consumo_L100', 'Desvio_Neto']].fillna(0)
-            modelo = IsolationForest(contamination=0.1, random_state=42) # Detecta el 10% más raro
+            modelo = IsolationForest(contamination=0.1, random_state=42)
             df_historico['IA_Status'] = modelo.fit_predict(data_ia)
-            
             anomalias = df_historico[df_historico['IA_Status'] == -1]
             if not anomalias.empty:
-                st.warning(f"La IA detectó {len(anomalias)} registros con consumos o desvíos fuera de lo normal.")
+                st.warning(f"Se detectaron {len(anomalias)} anomalías.")
                 st.dataframe(anomalias[['Fecha', 'Chofer', 'Movil', 'Consumo_L100', 'Desvio_Neto']])
-            else:
-                st.success("✅ No se detectan anomalías críticas en los últimos registros.")
-        else:
-            st.info("La IA está aprendiendo. Necesita al menos 5 registros para analizar patrones.")
-
-        # --- 2. KPI'S PRINCIPALES ---
+        
+        # --- KPI'S ---
         col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Consumo Promedio General", f"{round(df_historico['Consumo_L100'].mean(), 2)} L/100")
+        col_a.metric("Consumo Promedio", f"{round(df_historico['Consumo_L100'].mean(), 2)} L/100")
         col_b.metric("Desvío Neto Total", f"{round(df_historico['Desvio_Neto'].sum(), 2)} L")
-        col_c.metric("KM Totales Flota", f"{int(df_historico['KM_Recorr'].sum())} km")
+        col_c.metric("KM Totales", f"{int(df_historico['KM_Recorr'].sum())} km")
 
-        # --- 3. COMPARATIVA DE MARCAS ---
-        st.subheader("🏎️ Rendimiento por Marca (Scania vs Mercedes)")
-        fig_marca = px.box(df_historico, x="Marca", y="Consumo_L100", color="Marca", points="all", title="Dispersión de Consumo por Marca")
-        st.plotly_chart(fig_marca, use_container_width=True)
+        # --- GRÁFICOS ---
+        st.subheader("🏎️ Scania vs Mercedes")
+        st.plotly_chart(px.box(df_historico, x="Marca", y="Consumo_L100", color="Marca"), use_container_width=True)
 
-        # --- 4. RANKING DE EFICIENCIA CHOFERES ---
-        st.subheader("🏆 Ranking Eco-Driving (Mejores Choferes)")
+        st.subheader("🏆 Ranking Choferes")
         ranking = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().reset_index()
-        fig_rank = px.bar(ranking, x="Consumo_L100", y="Chofer", orientation='h', color="Consumo_L100", title="Choferes más eficientes (Menos es mejor)")
-        st.plotly_chart(fig_rank, use_container_width=True)
-
-        # --- 5. TABLA HISTÓRICA ---
-        st.subheader("📝 Historial Completo")
-        st.dataframe(df_historico.iloc[::-1], use_container_width=True)
-    else:
-        st.info("Esperando datos para iniciar el análisis IA.")
+        st.plotly_chart(px.bar(ranking, x="Consumo_L100", y="Chofer", orientation='h', color="Consumo_L100"), use_container_width=True)
