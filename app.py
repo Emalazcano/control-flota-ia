@@ -126,32 +126,49 @@ with tabs[0]:
                 time.sleep(1)
                 st.rerun()
 
-# --- TAB 2: OJO DE HALCÓN (RANKING EJECUTIVO FINAL) ---
+# --- TAB 2: OJO DE HALCÓN (DASHBOARD CON FILTRO MENSUAL) ---
 with tabs[1]:
     if not df_h.empty:
-        # 3) MÉTRICAS DE CABECERA
-        st.markdown("### 🦅 Inteligencia de Flota")
+        # --- NUEVA SECCIÓN DE FILTROS ---
+        st.markdown("### 🔍 Filtros de Análisis")
+        col_f1, col_f2 = st.columns([1, 2])
+        
+        with col_f1:
+            # Creamos una lista de meses disponibles basados en la columna Fecha
+            df_h['Mes_Año'] = df_h['Fecha'].dt.strftime('%m-%Y')
+            meses_disp = ["Todos"] + sorted(df_h['Mes_Año'].unique().tolist(), reverse=True)
+            mes_sel = st.selectbox("📅 Seleccionar Mes/Año", meses_disp)
+        
+        # Filtrado del DataFrame
+        if mes_sel != "Todos":
+            df_view = df_h[df_h['Mes_Año'] == mes_sel].copy()
+        else:
+            df_view = df_h.copy()
+            
+        st.divider()
+
+        # 3) MÉTRICAS DE CABECERA (Usamos df_view para que cambien con el filtro)
+        st.markdown(f"### 🦅 Inteligencia de Flota - Periodo: {mes_sel}")
         m1, m2, m3 = st.columns(3)
         with m1:
-            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:12px; border-left: 5px solid #636EFA; text-align:center;"><p style="margin:0; color:#aab; font-size:14px;">📉 PROMEDIO FLOTA</p><h2 style="margin:0; color:white;">{df_h["Consumo_L100"].mean():,.1f} <span style="font-size:16px;">L/100</span></h2></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:12px; border-left: 5px solid #636EFA; text-align:center;"><p style="margin:0; color:#aab; font-size:14px;">📉 PROMEDIO PERIODO</p><h2 style="margin:0; color:white;">{df_view["Consumo_L100"].mean():,.1f} <span style="font-size:16px;">L/100</span></h2></div>', unsafe_allow_html=True)
         with m2:
-            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:12px; border-left: 5px solid #00CC96; text-align:center;"><p style="margin:0; color:#aab; font-size:14px;">⛽ TOTAL CARGADO</p><h2 style="margin:0; color:white;">{df_h["L_Ticket"].sum():,.0f} <span style="font-size:16px;">Lts</span></h2></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:12px; border-left: 5px solid #00CC96; text-align:center;"><p style="margin:0; color:#aab; font-size:14px;">⛽ TOTAL CARGADO</p><h2 style="margin:0; color:white;">{df_view["L_Ticket"].sum():,.0f} <span style="font-size:16px;">Lts</span></h2></div>', unsafe_allow_html=True)
         with m3:
-            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:12px; border-left: 5px solid #EF553B; text-align:center;"><p style="margin:0; color:#aab; font-size:14px;">💰 INVERSIÓN TOTAL</p><h2 style="margin:0; color:white;">$ {df_h["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:12px; border-left: 5px solid #EF553B; text-align:center;"><p style="margin:0; color:#aab; font-size:14px;">💰 INVERSIÓN PERIODO</p><h2 style="margin:0; color:white;">$ {df_view["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
         st.divider()
 
         # 1) CUADRO DE HONOR: ECO-DRIVING (image_bab940.png)
-        st.markdown("### 🏆 Cuadro de Honor: Eco-Driving")
-        top_5 = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
+        st.markdown("### 🏆 Cuadro de Honor")
+        top_5 = df_view.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
-        # Usamos los iconos y estilos exactos de tu captura
         iconos = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
             with cols[i]:
                 st.markdown(f"""
                     <div style="background:#1e2130; padding:15px; border-radius:10px; border:1px solid #3d425a; text-align:center; min-height:190px;">
-                        <div style="font-size:40px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">{iconos[i]}</div>
+                        <div style="font-size:40px;">{iconos[i]}</div>
                         <div style="font-weight:bold; color:white; font-size:14px; margin:15px 0;">{row['Chofer']}</div>
                         <div style="font-size:30px; color:#4CAF50; font-weight:bold;">{row['Consumo_L100']:.1f}</div>
                         <div style="color:#aab; font-size:12px;">L/100</div>
@@ -160,66 +177,41 @@ with tabs[1]:
 
         st.divider()
 
-        # 2) RANKING DE DESVÍO DE COMBUSTIBLE (Sustituye imagen_c607c2.png por Ranking)
-        st.markdown("### ⚠️ Ranking de Alerta: Control de Desvíos")
-        st.info("Tolerancia máxima permitida: 50 Litros")
+        # 2) RANKING DE DESVÍO DE COMBUSTIBLE
+        st.markdown("### ⚠️ Control de Desvíos del Mes")
+        df_desv = df_view.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         
-        df_desv = df_h.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        
-        # Layout de dos columnas para no hacer la lista eterna
-        col_alert1, col_alert2 = st.columns(2)
-        
+        c_a1, c_a2 = st.columns(2)
         for i, row in df_desv.iterrows():
-            # Definir estilo si supera la tolerancia de 50L
             exceso = row['Desvio_Neto'] > 50
             bg_color = "#421212" if exceso else "#1e2130"
             border_color = "#FF4B4B" if exceso else "#3d425a"
-            text_color = "#FF4B4B" if exceso else "#00CC96"
-            label = "🚨 EXCESO" if exceso else "✅ DENTRO DEL LÍMITE"
-            
-            target_col = col_alert1 if i % 2 == 0 else col_alert2
-            
+            target_col = c_a1 if i % 2 == 0 else c_a2
             with target_col:
                 st.markdown(f"""
                     <div style="background:{bg_color}; padding:12px; border-radius:8px; border:1px solid {border_color}; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
                         <div>
                             <div style="font-weight:bold; color:white; font-size:15px;">{row['Chofer']}</div>
-                            <div style="font-size:11px; color:{text_color}; font-weight:bold;">{label}</div>
+                            <div style="font-size:11px; color:{'#FF4B4B' if exceso else '#00CC96'}; font-weight:bold;">{'🚨 EXCESO' if exceso else '✅ OK'}</div>
                         </div>
-                        <div style="text-align:right;">
-                            <div style="font-size:22px; font-weight:bold; color:white;">{row['Desvio_Neto']:.1f} <span style="font-size:12px;">Lts</span></div>
-                        </div>
+                        <div style="font-size:22px; font-weight:bold; color:white;">{row['Desvio_Neto']:.1f} L</div>
                     </div>
                 """, unsafe_allow_html=True)
 
         st.divider()
 
-        # 4 y 5) RANKINGS DE UNIDADES Y RALENTÍ (image_c600bc.png)
-        st.markdown("### 📊 Análisis de Eficiencia y Ralentí")
+        # 4 y 5) RANKINGS FINALES
         c_low1, c_low2 = st.columns(2)
-        
         with c_low1:
-            st.markdown("##### 🔢 Ranking por Unidad (Móviles)")
-            rank_m = df_h.groupby("Movil")["Consumo_L100"].mean().sort_values(ascending=True).head(10).reset_index()
-            # Mostramos como tabla de ranking limpia
+            st.markdown("##### 🔢 Unidades más Eficientes")
+            rank_m = df_view.groupby("Movil")["Consumo_L100"].mean().sort_values(ascending=True).head(5).reset_index()
             for i, row in rank_m.iterrows():
-                st.markdown(f"""
-                    <div style="background:#1e2130; padding:8px 15px; border-radius:6px; margin-bottom:4px; border-left:4px solid #00CC96; display:flex; justify-content:space-between;">
-                        <span style="color:white;">#{i+1} Móvil <b>{row['Movil']}</b></span>
-                        <span style="color:#00CC96; font-weight:bold;">{row['Consumo_L100']:.1f} L/100</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div style="background:#1e2130; padding:8px 15px; border-radius:6px; margin-bottom:4px; border-left:4px solid #00CC96; display:flex; justify-content:space-between;"><span style="color:white;">Móvil {row["Movil"]}</span><span style="color:#00CC96; font-weight:bold;">{row["Consumo_L100"]:.1f} L/100</span></div>', unsafe_allow_html=True)
 
         with c_low2:
-            st.markdown("##### ⏳ Ranking Desperdicio Ralentí")
-            rank_r = df_h.groupby("Chofer")["L_Ralenti"].sum().sort_values(ascending=False).head(10).reset_index()
+            st.markdown("##### ⏳ Mayor Desperdicio Ralentí")
+            rank_r = df_view.groupby("Chofer")["L_Ralenti"].sum().sort_values(ascending=False).head(5).reset_index()
             for i, row in rank_r.iterrows():
-                st.markdown(f"""
-                    <div style="background:#1e2130; padding:8px 15px; border-radius:6px; margin-bottom:4px; border-left:4px solid #EF553B; display:flex; justify-content:space-between;">
-                        <span style="color:white;">{row['Chofer']}</span>
-                        <span style="color:#EF553B; font-weight:bold;">{row['L_Ralenti']:.1f} Lts</span>
-                    </div>
-                """, unsafe_allow_html=True)
-
+                st.markdown(f'<div style="background:#1e2130; padding:8px 15px; border-radius:6px; margin-bottom:4px; border-left:4px solid #EF553B; display:flex; justify-content:space-between;"><span style="color:white;">{row["Chofer"]}</span><span style="color:#EF553B; font-weight:bold;">{row["L_Ralenti"]:.1f} L</span></div>', unsafe_allow_html=True)
     else:
-        st.warning("No hay datos cargados para generar los rankings.")
+        st.warning("Sin datos para filtrar.")
