@@ -163,25 +163,43 @@ with tab_ia:
                 """, unsafe_allow_html=True)
                 
         with g2:
-            st.subheader("⚠️ Desvío de Combustible por Chofer")
-            # Agrupamos por chofer para ver la suma de sus desvíos
+            st.subheader("⚠️ Monitor de Desvío Crítico")
+            # Agrupamos por chofer para ver el total de litros desviados
             desvio_chofer = df_h.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
             
-            # Creamos el gráfico de barras
-            fig_desvio = px.bar(
-                desvio_chofer,
-                x="Desvio_Neto",
-                y="Chofer",
-                orientation='h',
-                title="Total Litros Desviados (Ticket vs Tablero)",
-                labels={"Desvio_Neto": "Litros de Desvío", "Chofer": "Chofer"},
-                color="Desvio_Neto",
-                color_continuous_scale="Reds", # Los desvíos más altos se verán más rojos
-                template="plotly_dark"
-            )
+            for _, r in desvio_chofer.iterrows():
+                # Lógica de colores según la gravedad del desvío
+                desvio_valor = r['Desvio_Neto']
+                if desvio_valor > 20:
+                    color_borde = "#FF4B4B"  # Rojo Alerta
+                    fondo = "rgba(255, 75, 75, 0.1)"
+                    msg = "REVISAR CARGA"
+                elif desvio_valor > 5:
+                    color_borde = "#FFA500"  # Naranja Advertencia
+                    fondo = "rgba(255, 165, 0, 0.1)"
+                    msg = "Desvío moderado"
+                else:
+                    color_borde = "#28a745"  # Verde OK
+                    fondo = "rgba(40, 167, 69, 0.1)"
+                    msg = "Dentro del rango"
+
+                # Diseño estético de la fila
+                st.markdown(f"""
+                <div style="background-color: {fondo}; padding: 15px; border-radius: 10px; 
+                            margin-bottom: 10px; border-left: 8px solid {color_borde}; 
+                            display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <b style="font-size: 18px;">{r['Chofer']}</b><br>
+                        <small style="color: #cccccc;">Estado: {msg}</small>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-size: 22px; font-weight: bold; color: {color_borde};">
+                            {desvio_valor:.1f} L
+                        </span><br>
+                        <small style="color: #cccccc;">Litros perdidos</small>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
-            # Ajustamos el diseño para que se vea impecable
-            fig_desvio.update_layout(showlegend=False, height=400)
-            st.plotly_chart(fig_desvio, use_container_width=True)
-            
-            st.info("💡 **Dato clave:** El desvío neto es la diferencia entre los litros del ticket y la suma de (Tablero + Ralentí).")
+            if desvio_chofer.empty:
+                st.info("No hay desvíos registrados aún.")
