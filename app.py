@@ -5,18 +5,8 @@ from datetime import datetime
 import time
 import os
 
-# --- 1. CONFIGURACIÓN Y ESTILOS (AUDITADOS) ---
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
-
-# Estilos para que las tarjetas y el login se vean prolijos
-st.markdown("""
-    <style>
-    .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
-    .driver-name { font-weight: bold; font-size: 16px; margin: 5px 0; color: white; }
-    .driver-score { font-size: 22px; color: #4CAF50; font-weight: bold; }
-    .category-header { background: linear-gradient(90deg, #1e2130, #3d425a); padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: center; }
-    </style>
-""", unsafe_allow_html=True)
 
 # --- 2. LOGIN ---
 if "auth" not in st.session_state:
@@ -32,24 +22,35 @@ if "auth" not in st.session_state:
             else: st.error("Clave incorrecta")
     st.stop()
 
-# --- 3. CARGA DE DATOS (EXCEL + SHEETS) ---
+# --- 3. DATOS Y CONEXIONES ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 
 if "precio_gasoil" not in st.session_state:
-    st.session_state["precio_gasoil"] = 2065.0 # Actualizado según tu captura
+    st.session_state["precio_gasoil"] = 2065.0
 
-@st.cache_data
-def obtener_lista_choferes():
-    archivo = "choferes.xlsx"
-    if os.path.exists(archivo):
-        xl = pd.read_excel(archivo)
-        col = "Chofer" if "Chofer" in xl.columns else xl.columns[0]
-        return sorted(xl[col].dropna().unique().tolist())
-    return ["ADELMO JORGE", "VALENTIN ARIEL", "BENITEZ DIEGO"] # Fallback
+@st.cache_data(ttl=600)
+def obtener_choferes():
+    if os.path.exists("choferes.xlsx"):
+        try:
+            xl = pd.read_excel("choferes.xlsx")
+            return sorted(xl.iloc[:, 0].dropna().unique().tolist())
+        except: pass
+    return ["ADELMO JORGE", "BENITEZ DIEGO", "GONZALEZ FABIAN"]
 
-df_h = conn.read(spreadsheet=URL, ttl=0)
-LISTA_MAESTRA = obtener_lista_choferes()
+def cargar_historial():
+    try:
+        df = conn.read(spreadsheet=URL, ttl=0)
+        # Forzar numéricos para evitar errores de cálculo
+        num_cols = ["KM_Fin", "L_Ticket", "L_Tablero", "L_Ralenti"]
+        for col in num_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        return df
+    except: return pd.DataFrame()
+
+df_h = cargar_historial()
+lista_choferes = obtener_choferes()
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
@@ -58,67 +59,77 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Histo
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # Fila superior: Precio Gasoil (Limpio)
-    c_p, _ = st.columns([1, 3])
-    with c_p:
-        st.session_state["precio_gasoil"] = st.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
+    # Precio Gasoil (Fuera del form para que sea dinámico)
+    cp, _ = st.columns([1, 3])
+    st.session_state["precio_gasoil"] = cp.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
     
-    with st.form("registro_form", clear_on_submit=True):
-        # Organización amigable en 3 columnas (Como en image_bb35be.png)
+    with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
         
         with col1:
             st.markdown("##### 🚛 Vehículo")
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36) # Index 36 es el móvil 37
-            marca = st.radio("🏷️ Marca del Vehículo", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            chofer = st.selectbox("👤 Chofer", LISTA_MAESTRA)
+            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+            marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
+            chofer = st.selectbox("👤 Chofer", lista_choferes)
             
         with col2:
-            st.markdown("##### 📍 Ruta y Trayecto")
+            st.markdown("##### 📍 Ruta")
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            traza = st.selectbox("🗺️ Seleccionar Traza", ["➕ NUEVA"] + sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else ["➕ NUEVA"])
-            nt = st.text_input("✍️ Nombre Nueva Traza (Opcional)").upper()
+            traza_existente = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
+            traza = st.selectbox("🗺️ Traza", traza_existente)
+            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza == "➕ NUEVA" and nt != "") else traza
 
         with col3:
-            st.markdown("##### ⛽ Kilometraje y Combustible")
-            # KM Inicial automático por móvil
-            km_auto = int(df_h[df_h["Movil"] == movil_sel]["KM_Fin"].max()) if not df_h.empty else 0
-            kmi = st.number_input("🛣️ KM Inicial", value=km_auto)
-            kmf = st.number_input("🏁 KM Final")
-            lt = st.number_input("⛽ Litros Ticket")
-            ltab = st.number_input("📟 Litros Tablero")
-            lral = st.number_input("⏳ Litros Ralentí")
+            st.markdown("##### ⛽ Consumo")
+            # Corrección del error de KM_Fin (Safe find)
+            km_previo = 0
+            if not df_h.empty and movil_sel in df_h["Movil"].values:
+                km_previo = df_h[df_h["Movil"] == movil_sel]["KM_Fin"].max()
+            
+            kmi = st.number_input("🛣️ KM Inicial", value=int(km_previo))
+            kmf = st.number_input("🏁 KM Final", value=0)
+            lt = st.number_input("⛽ Litros Ticket", value=0.0)
+            ltab = st.number_input("📟 Litros Tablero", value=0.0)
+            lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-        # --- CALCULADORA AUTOMÁTICA ---
-        recorrido = kmf - kmi
-        consumo = (lt / recorrido * 100) if recorrido > 0 else 0
-        costo = lt * st.session_state["precio_gasoil"]
-        desvio = lt - (ltab + lral)
-
-        st.divider()
-        if recorrido > 0:
-            # Resumen visual rápido
+        # El botón DEBE estar dentro del bloque 'with st.form'
+        submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+        
+        # Cálculos (Calculadora recuperada)
+        distancia = kmf - kmi
+        consumo = (lt / distancia * 100) if distancia > 0 else 0
+        costo_t = lt * st.session_state["precio_gasoil"]
+        
+        if distancia > 0:
+            st.divider()
             c1, c2, c3 = st.columns(3)
-            c1.info(f"📏 Distancia: **{recorrido} KM**")
-            c2.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-            c3.info(f"💰 Costo: **${costo:,.0f}**")
+            c1.metric("📏 Recorrido", f"{distancia} KM")
+            c2.metric("📊 Consumo", f"{consumo:.1f} L/100")
+            c3.metric("💰 Costo Viaje", f"${costo_t:,.0f}")
 
-        if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True):
-            if kmf <= kmi or lt <= 0:
-                st.error("⚠️ Verifique que el KM Final sea mayor al inicial y los litros sean válidos.")
+        if submit:
+            if kmf <= kmi or lt <= 0 or t_final == "":
+                st.error("⚠️ Datos inválidos. Revise KMs y Litros.")
             else:
-                nuevo = {
-                    "Fecha": datetime.now().strftime('%Y-%m-%d'), "Movil": movil_sel, 
-                    "Chofer": chofer, "Marca": marca, "Ruta": ruta_tipo, "Traza": t_final, 
-                    "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": recorrido, "L_Ticket": lt, 
-                    "L_Tablero": ltab, "L_Ralenti": lral, "Desvio_Neto": round(desvio, 2), 
-                    "Consumo_L100": round(consumo, 2), "Costo_Total_ARS": round(costo, 2),
-                    "Costo_Ralenti_ARS": round(lral * st.session_state["precio_gasoil"], 2)
+                nuevo_reg = {
+                    "Fecha": datetime.now().strftime('%Y-%m-%d'), "Movil": movil_sel,
+                    "Chofer": chofer, "Marca": marca, "Ruta": ruta_tipo, "Traza": t_final,
+                    "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": distancia, "L_Ticket": lt,
+                    "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round(consumo, 2),
+                    "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(lt - (ltab + lral), 2)
                 }
-                # Aquí iría el guardado a Sheets
-                st.success("✅ Datos procesados y guardados.")
+                df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                conn.update(spreadsheet=URL, data=df_up)
+                st.success("✅ ¡Registro guardado!")
                 time.sleep(1)
                 st.rerun()
 
-# El resto de los tabs (Ojo de Halcón e Historial) se mantienen igual
+# --- TABS DE VISUALIZACIÓN ---
+with tabs[1]:
+    st.info("🦅 Sección de análisis activo")
+    if not df_h.empty:
+        st.dataframe(df_h.head()) # Aquí irían tus gráficos de image_baaed7.png
+
+with tabs[2]:
+    st.dataframe(df_h.iloc[::-1], use_container_width=True)
