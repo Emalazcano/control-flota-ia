@@ -136,3 +136,67 @@ elif menu == "Análisis IA & Dashboard":
         st.subheader("🏆 Ranking de Eficiencia")
         ranking = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().reset_index()
         st.plotly_chart(px.bar(ranking, x="Consumo_L100", y="Chofer", orientation='h', color="Consumo_L100"), use_container_width=True)
+        import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+from datetime import datetime
+import time
+import hashlib
+
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Control de Flota Seguro", layout="wide")
+
+# --- FUNCIÓN DE LOGIN ---
+def check_password():
+    """Retorna True si el usuario introdujo la contraseña correcta."""
+    def password_entered():
+        # Verificación básica (puedes cambiar los nombres y claves aquí)
+        usuarios_validos = {
+            "ema_admin": "jujuy2024",
+            "operador": "flota123"
+        }
+        user = st.session_state["username"]
+        pwd = st.session_state["password"]
+        
+        if user in usuarios_validos and usuarios_validos[user] == pwd:
+            st.session_state["password_correct"] = True
+            st.session_state["user_role"] = "admin" if user == "ema_admin" else "operador"
+            del st.session_state["password"]  # No guardar la clave en el estado
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # Pantalla de inicio de sesión
+        st.title("🔐 Acceso Sistema de Flota")
+        st.text_input("Usuario", on_change=None, key="username")
+        st.text_input("Contraseña", type="password", on_change=None, key="password")
+        st.button("Ingresar", on_click=password_entered)
+        return False
+    elif not st.session_state["password_correct"]:
+        st.error("😕 Usuario o contraseña incorrectos")
+        st.text_input("Usuario", on_change=None, key="username")
+        st.text_input("Contraseña", type="password", on_change=None, key="password")
+        st.button("Ingresar", on_click=password_entered)
+        return False
+    else:
+        return True
+
+# --- INICIO DEL PROGRAMA ---
+if check_password():
+    # Aquí va todo tu código anterior...
+    role = st.session_state["user_role"]
+    
+    st.sidebar.success(f"Conectado como: {st.session_state['username'].upper()}")
+    if st.sidebar.button("Cerrar Sesión"):
+        del st.session_state["password_correct"]
+        st.rerun()
+
+    # --- LÓGICA DE MENÚ BASADA EN ROL ---
+    if role == "admin":
+        menu_options = ["Cargar Combustible", "Calculadora de Flete (IA)", "Análisis IA & Dashboard"]
+    else:
+        menu_options = ["Cargar Combustible"] # El operador solo ve la carga
+    
+    menu = st.sidebar.selectbox("Menú", menu_options)
+
+    # ... Resto del código (obtener_datos, formularios, etc.) ...
