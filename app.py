@@ -11,6 +11,7 @@ from fpdf import FPDF
 st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 
 # --- 2. CONEXIÓN ---
+# ⚠️ REEMPLAZA CON TU URL DE GOOGLE SHEETS
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -18,8 +19,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def obtener_datos():
     try:
-        data = conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
-        return data
+        return conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
     except:
         return pd.DataFrame()
 
@@ -48,7 +48,7 @@ def generar_comprobante_pdf(datos):
 def check_password():
     if "password_correct" not in st.session_state:
         st.title("🔐 Acceso Sistema de Flota")
-        st.text_input("Usuario", key="username")
+        st.text_input("Usuario", key="username", placeholder="Ej: ema_admin")
         st.text_input("Contraseña", type="password", key="password")
         if st.button("Ingresar"):
             usuarios_validos = {"ema_admin": "jujuy2024", "operador": "flota123"}
@@ -66,11 +66,12 @@ def check_password():
 # --- 4. PROGRAMA PRINCIPAL ---
 
 if check_password():
+    # Evitamos errores de memoria con .get()
     user_logueado = st.session_state.get("username", "ADMIN").upper()
     role = st.session_state.get("user_role", "operador")
     df_historico = obtener_datos()
 
-    # Sidebar
+    # SIDEBAR: Solo se dibuja una vez aquí adentro
     st.sidebar.success(f"👤 {user_logueado}")
     precio_litro = st.sidebar.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0)
     
@@ -81,6 +82,7 @@ if check_password():
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
+    # --- LÓGICA DE CONTENIDO ---
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
         
@@ -95,7 +97,8 @@ if check_password():
         with st.form("form_carga"):
             col1, col2 = st.columns(2)
             with col1:
-                fecha = st.date_input("Fecha de Carga", datetime.now())
+                # CAMBIO CLAVE: format="DD/MM/YYYY" para ver la fecha como en Argentina
+                fecha = st.date_input("Fecha de Carga", datetime.now(), format="DD/MM/YYYY")
                 chofer = st.text_input("Nombre del Chofer")
                 marca = st.radio("Marca", ["Scania", "Mercedes"])
                 ruta = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
@@ -111,13 +114,17 @@ if check_password():
 
         if btn_guardar:
             if km_fin <= km_ini:
-                st.error("❌ El KM Final debe ser mayor.")
+                st.error("❌ El KM Final debe ser mayor al Inicial.")
+            elif l_ticket <= 0:
+                st.error("❌ Los litros deben ser mayores a 0.")
             else:
                 km_recorr = km_fin - km_ini
                 consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
                 costo_total = l_ticket * precio_litro
                 costo_ralenti = l_ralenti * precio_litro
                 desvio = l_ticket - (l_tablero + l_ralenti)
+                
+                # Formateamos la fecha para el guardado y el PDF
                 fecha_arg = fecha.strftime('%d/%m/%Y')
                 
                 datos_viaje = {
@@ -133,31 +140,30 @@ if check_password():
                 try:
                     df_final = pd.concat([df_historico, pd.DataFrame([datos_viaje])], ignore_index=True)
                     conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                    st.success("✅ Registro guardado.")
+                    st.success(f"✅ Registro guardado en Sheets. Costo: ${costo_total:,.2f}")
                     
                     pdf_bytes = generar_comprobante_pdf(datos_viaje)
-                    st.download_button(label="📥 DESCARGAR COMPROBANTE PDF", data=bytes(pdf_bytes), 
-                                     file_name=f"Viaje_M{movil_sel}.pdf", mime="application/pdf")
+                    st.download_button(
+                        label="📥 DESCARGAR COMPROBANTE PDF",
+                        data=bytes(pdf_bytes),
+                        file_name=f"Viaje_M{movil_sel}_{fecha_arg.replace('/','-')}.pdf",
+                        mime="application/pdf"
+                    )
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Error al guardar: {e}")
 
     elif menu == "Análisis IA & Dashboard":
         st.header("📊 Inteligencia de Flota y Costos")
         if not df_historico.empty:
-            # --- PROTECCIÓN CONTRA COLUMNAS FALTANTES ---
-            if "Costo_Ralenti_ARS" not in df_historico.columns:
-                df_historico["Costo_Ralenti_ARS"] = 0
-            if "Chofer" not in df_historico.columns:
-                df_historico["Chofer"] = "Desconocido"
-            if "Marca" not in df_historico.columns:
-                df_historico["Marca"] = "S/D"
+            # Protecciones anti-error si faltan columnas
+            for col in ["Costo_Ralenti_ARS", "Chofer", "Marca"]:
+                if col not in df_historico.columns: df_historico[col] = 0 if "Costo" in col else "S/D"
 
-            # Gráfico
             fig = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", 
-                         title="Pesos malgastados por motor encendido en espera")
+                         title="Pesos perdidos por ralentí por chofer")
             st.plotly_chart(fig, use_container_width=True)
             
             st.subheader("📝 Historial de Registros")
             st.dataframe(df_historico.iloc[::-1])
         else:
-            st.info("No hay datos para mostrar.")
+            st.info("Aún no hay datos para mostrar.")
