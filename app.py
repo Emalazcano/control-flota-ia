@@ -1,7 +1,6 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import plotly.express as px
 from datetime import datetime, date
 import time
 import os
@@ -71,16 +70,21 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Histo
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # Selector de precio fuera para que sea global
+    # Precio fuera para persistencia
     cp_col, _ = st.columns([1, 3])
     st.session_state["precio_gasoil"] = cp_col.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
     
-    # 1. Selector de Móvil fuera del Form para que el KM reaccione al instante
-    m_col1, m_col2, m_col3 = st.columns(3)
-    with m_col1:
-        movil_sel = st.selectbox("🔢 Seleccionar Móvil", list(range(1, 101)), index=36)
+    # --- SELECTORES DINÁMICOS (FUERA DEL FORM PARA REACTIVIDAD) ---
+    st.markdown("##### 📅 1. Identificación del Viaje")
+    c_prep1, c_prep2, c_prep3 = st.columns(3)
+    
+    with c_prep1:
+        fecha_viaje = st.date_input("Fecha", value=date.today())
+    
+    with c_prep2:
+        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
         
-        # Búsqueda del último KM registrado para este móvil
+        # Búsqueda instantánea del último KM
         km_sugerido = 0.0
         if not df_h.empty:
             ult_reg = df_h[df_h["Movil"].astype(str) == str(movil_sel)]
@@ -88,33 +92,32 @@ with tabs[0]:
                 ult_reg = ult_reg.sort_values("Fecha")
                 km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
 
-    # 2. Formulario de carga
+    # --- FORMULARIO PRINCIPAL ---
     with st.form("registro_form", clear_on_submit=True):
         f_col1, f_col2, f_col3 = st.columns(3)
         
         with f_col1:
-            st.markdown("##### 📅 Información General")
-            fecha_viaje = st.date_input("Fecha del Viaje", value=date.today())
-            marca = st.radio("🏷️ Marca Vehículo", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            chofer = st.selectbox("👤 Chofer Responsable", lista_choferes)
+            st.markdown("##### 🚛 Vehículo")
+            marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
+            chofer = st.selectbox("👤 Chofer", lista_choferes)
             
         with f_col2:
-            st.markdown("##### 📍 Trayecto")
+            st.markdown("##### 📍 Ruta")
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
             traza_existente = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
-            traza = st.selectbox("🗺️ Traza Registrada", traza_existente)
-            nt = st.text_input("✍️ Nombre Nueva Traza (Si aplica)").upper()
+            traza = st.selectbox("🗺️ Traza", traza_existente)
+            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza == "➕ NUEVA" and nt != "") else traza
             
         with f_col3:
-            st.markdown("##### ⛽ Datos de Consumo")
+            st.markdown("##### ⛽ Consumo")
             kmi = st.number_input("🛣️ KM Inicial", value=km_sugerido, step=1.0)
             kmf = st.number_input("🏁 KM Final", step=1.0)
             lt = st.number_input("⛽ Litros Ticket", step=0.1)
-            ltab = st.number_input("📟 Litros Tablero (Opcional)", step=0.1)
-            lral = st.number_input("⏳ Litros Ralentí (Opcional)", step=0.1)
+            ltab = st.number_input("📟 Litros Tablero", step=0.1)
+            lral = st.number_input("⏳ Litros Ralentí", step=0.1)
 
-        # Cálculos internos
+        # Cálculos
         distancia = kmf - kmi
         consumo = (lt / distancia * 100) if distancia > 0 else 0
         costo_t = lt * st.session_state["precio_gasoil"]
@@ -127,32 +130,23 @@ with tabs[0]:
             r2.metric("📊 Consumo", f"{consumo:.1f} L/100")
             r3.metric("💰 Costo Total", f"${costo_t:,.0f}")
 
-        submit = st.form_submit_button("💾 GUARDAR REGISTRO EN LA NUBE", use_container_width=True)
+        submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Error: Verifique que el KM Final sea mayor al Inicial y que la Traza tenga nombre.")
+                st.error("⚠️ Datos inválidos. Revise KMs y Traza.")
             else:
                 nuevo_reg = {
                     "Fecha": fecha_viaje.strftime('%Y-%m-%d'), 
                     "Movil": movil_sel,
-                    "Chofer": chofer, 
-                    "Marca": marca, 
-                    "Ruta": ruta_tipo, 
-                    "Traza": t_final,
-                    "KM_Ini": kmi, 
-                    "KM_Fin": kmf, 
-                    "KM_Recorr": distancia, 
-                    "L_Ticket": lt,
-                    "L_Tablero": ltab, 
-                    "L_Ralenti": lral, 
-                    "Consumo_L100": round(consumo, 2),
-                    "Costo_Total_ARS": round(costo_t, 2), 
-                    "Desvio_Neto": round(desvio_n, 2)
+                    "Chofer": chofer, "Marca": marca, "Ruta": ruta_tipo, "Traza": t_final,
+                    "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": distancia, "L_Ticket": lt,
+                    "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round(consumo, 2),
+                    "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(desvio_n, 2)
                 }
                 df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 conn.update(spreadsheet=URL, data=df_up)
-                st.success(f"✅ ¡Viaje del {fecha_viaje} guardado correctamente!")
+                st.success("✅ Registro guardado!")
                 time.sleep(1)
                 st.rerun()
 
@@ -165,15 +159,15 @@ with tabs[1]:
         with f_c1:
             df_h['Mes_Año'] = df_h['Fecha'].dt.strftime('%m-%Y')
             meses_disp = ["Todos"] + sorted(df_h['Mes_Año'].unique().tolist(), reverse=True)
-            mes_sel = st.selectbox("📅 Ver Periodo", meses_disp)
+            mes_sel = st.selectbox("📅 Periodo", meses_disp)
         
         df_view = df_h[df_h['Mes_Año'] == mes_sel].copy() if mes_sel != "Todos" else df_h.copy()
         
         st.divider()
         m1, m2, m3 = st.columns(3)
-        m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO PERIODO</p><h2>{df_view["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
-        m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL LITROS</p><h2>{df_view["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
-        m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN ESTIMADA</p><h2>$ {df_view["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
+        m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_view["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
+        m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_view["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
+        m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_view["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
         st.divider()
         st.markdown("### 🏆 Ranking Eco-Driving")
@@ -184,17 +178,17 @@ with tabs[1]:
             cols_r[idx].markdown(f'<div class="metric-card"><div style="font-size:40px;">{meds[idx]}</div><div class="driver-name">{r["Chofer"]}</div><div class="driver-score">{r["Consumo_L100"]:.1f}</div><small style="color:#aab;">L/100</small></div>', unsafe_allow_html=True)
 
         st.divider()
-        st.markdown("### ⚠️ Control de Desvíos de Combustible")
+        st.markdown("### ⚠️ Control de Desvíos (>50L)")
         df_d = df_view.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         a1, a2 = st.columns(2)
         for i, row in df_d.iterrows():
             is_ex = row['Desvio_Neto'] > 50
             col_target = a1 if i % 2 == 0 else a2
-            col_target.markdown(f'<div style="background:{"#421212" if is_ex else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if is_ex else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><b style="color:white;">{row["Chofer"]}</b><br><small style="color:{"#FF4B4B" if is_ex else "#00CC96"};">{"🚨 ALERTA EXCESO" if is_ex else "✅ DENTRO DE TOLERANCIA"}</small></div><b style="font-size:20px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+            col_target.markdown(f'<div style="background:{"#421212" if is_ex else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if is_ex else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><b style="color:white;">{row["Chofer"]}</b><br><small style="color:{"#FF4B4B" if is_ex else "#00CC96"};">{"🚨 EXCESO" if is_ex else "✅ OK"}</small></div><b style="font-size:20px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
-    st.subheader("📜 Historial Completo")
+    st.subheader("📜 Historial de Registros")
     if not df_h.empty:
         st.dataframe(df_h.sort_values("Fecha", ascending=False), use_container_width=True)
-    else: st.info("No hay registros disponibles.")
+    else: st.info("Sin registros.")
