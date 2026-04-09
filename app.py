@@ -3,7 +3,6 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 import time
-import plotly.express as px
 import os
 
 # --- 1. CONFIGURACIÓN ---
@@ -58,12 +57,20 @@ lista_choferes = obtener_choferes()
 st.title("🚛 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro", "🦅 Inteligencia", "📜 Historial"])
 
-# PESTAÑA REGISTRO
+# --- PESTAÑA REGISTRO ---
 with tabs[0]:
     with st.form("registro", clear_on_submit=True):
+        st.subheader("📝 Nuevo Registro de Carga")
+        
+        # Fila superior: Precio del Gasoil (Variable)
+        c_precio, _ = st.columns([1, 2])
+        precio_gasoil = c_precio.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0, step=10.0, help="Cargar el precio vigente al momento de la carga")
+        
+        st.divider()
+        
         f1, f2, f3 = st.columns(3)
         with f1:
-            fecha = st.date_input("Fecha", datetime.now())
+            fecha = st.date_input("Fecha", datetime.now(), format="DD/MM/YYYY")
             movil = st.number_input("Móvil", min_value=1, max_value=100)
             chofer = st.selectbox("Chofer", lista_choferes)
         with f2:
@@ -77,63 +84,63 @@ with tabs[0]:
             ltab = st.number_input("Litros Tablero", min_value=0.0)
             lral = st.number_input("Litros Ralentí", min_value=0.0)
         
-        if st.form_submit_button("💾 GUARDAR"):
+        # Lógica de CALCULADORA
+        recorrido = kmf - kmi
+        consumo_estimado = (lt / recorrido * 100) if recorrido > 0 else 0
+        desvio = lt - (ltab + lral)
+        costo_viaje = lt * precio_gasoil
+        costo_ralenti = lral * precio_gasoil
+        
+        st.info(f"📊 **Cálculo:** Recorrido: {recorrido} km | Consumo: {consumo_estimado:.2f} L/100 | Costo Viaje: $ {costo_viaje:,.0f}")
+        
+        if st.form_submit_button("💾 GUARDAR REGISTRO"):
             if kmf > kmi and lt > 0:
-                recorrido = kmf - kmi
-                cons = (lt / recorrido * 100)
-                desv = lt - (ltab + lral)
                 nuevo = {
-                    "Fecha": fecha.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil,
-                    "Marca": marca, "Ruta": ruta, "Traza": traza, "KM_Ini": kmi, "KM_Fin": kmf,
-                    "KM_Recorr": recorrido, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Desvio_Neto": round(desv, 2), "Consumo_L100": round(cons, 2),
-                    "Costo_Total_ARS": round(lt * 1100, 2), "Costo_Ralenti_ARS": round(lral * 1100, 2)
+                    "Fecha": fecha.strftime('%d/%m/%Y'),
+                    "Chofer": chofer, "Movil": movil, "Marca": marca, "Ruta": ruta, 
+                    "Traza": traza, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": recorrido, 
+                    "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
+                    "Desvio_Neto": round(desvio, 2), 
+                    "Consumo_L100": round(consumo_estimado, 2),
+                    "Costo_Total_ARS": round(costo_viaje, 2), 
+                    "Costo_Ralenti_ARS": round(costo_ralenti, 2)
                 }
                 df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success("✅ Guardado")
+                st.success(f"✅ Guardado. Costo calculado a $ {precio_gasoil} el litro.")
                 time.sleep(1)
                 st.rerun()
+            else:
+                st.error("Revisá los datos (KM o Litros).")
 
-# PESTAÑA IA (Con Alertas Anteriores + Tolerancia 50L)
+# --- PESTAÑA IA ---
 with tabs[1]:
     if not df_h.empty:
         m1, m2, m3 = st.columns(3)
-        m1.metric("Gasto Total", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
-        m2.metric("Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
-        m3.metric("Desvío Neto Total", f"{df_h['Desvio_Neto'].sum():,.1f} L")
+        m1.metric("Gasto Acumulado", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
+        m2.metric("Pérdida por Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
+        m3.metric("Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
         
         st.divider()
         g1, g2 = st.columns(2)
-        
         with g1:
-            st.subheader("🏆 Eco-Driving")
-            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
+            st.subheader("🏆 Eco-Driving (Mejores 5)")
+            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
             for i, r in rank.iterrows():
-                emoji = ["🥇", "🥈", "🥉"][i]
-                st.write(f"{emoji} **{r['Chofer']}**: {r['Consumo_L100']:.2f} L/100km")
-        
+                st.write(f"{['🥇','🥈','🥉','👤','👤'][i]} **{r['Chofer']}**: {r['Consumo_L100']:.2f} L/100")
         with g2:
-            st.subheader("🚨 Alertas de Desvío")
-            # Agrupamos los desvíos actuales por chofer
-            alertas_df = df_h.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
-            
-            for _, r in alertas_df.iterrows():
-                valor = r['Desvio_Neto']
-                # Aplicamos la tolerancia de 50 litros
-                if valor > 50:
-                    st.error(f"**{r['Chofer']}**: {valor:.1f} Litros (Excede tolerancia)")
-                elif valor < -50:
-                    st.warning(f"**{r['Chofer']}**: {valor:.1f} Litros (Carga menor al tablero)")
-                else:
-                    # Estilo anterior para los que están en rango
-                    st.write(f"**{r['Chofer']}**: {valor:.1f} Litros (Normal)")
-    else:
-        st.info("Sin datos.")
+            st.subheader("🚨 Control de Desvíos (Tol. 50L)")
+            alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
+            for _, r in alertas.iterrows():
+                val = r['Desvio_Neto']
+                if val > 50: st.error(f"**{r['Chofer']}**: {val:.1f} L (Excedido)")
+                elif val < -50: st.warning(f"**{r['Chofer']}**: {val:.1f} L (Revisar)")
+                else: st.write(f"**{r['Chofer']}**: {val:.1f} L (Normal)")
+    else: st.info("Carga datos para ver estadísticas.")
 
-# PESTAÑA HISTORIAL
+# --- PESTAÑA HISTORIAL ---
 with tabs[2]:
-    st.subheader("📜 Historial Completo")
+    st.subheader("📜 Historial de Operaciones")
     if not df_h.empty:
         st.dataframe(df_h.iloc[::-1], use_container_width=True)
-        st.download_button("📥 Exportar CSV", df_h.to_csv(index=False), "historial.csv")
+        st.download_button("📥 Descargar Planilla CSV", df_h.to_csv(index=False), "historial_flota.csv")
