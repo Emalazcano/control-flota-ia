@@ -153,3 +153,69 @@ if check_password():
 
             st.subheader("📝 Historial Completo")
             st.dataframe(df_historico.iloc[::-1], use_container_width=True)
+     elif menu == "Análisis IA & Dashboard":
+        st.header("📊 Inteligencia de Flota y Control de Costos")
+        
+        if df_historico.empty:
+            st.info("Aún no hay datos. Registrá un viaje para activar el análisis.")
+     else:
+            # 1. Limpieza y preparación de datos numéricos
+            cols_num = ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto", "L_Tablero"]
+            for c in cols_num:
+                if c in df_historico.columns:
+                    df_historico[c] = pd.to_numeric(df_historico[c], errors='coerce').fillna(0)
+
+            # 2. MÉTRICAS PRINCIPALES
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Gasto Total", f"$ {df_historico['Costo_Total_ARS'].sum():,.0f}")
+            m2.metric("Total Litros", f"{df_historico['L_Ticket'].sum():,.0f} L")
+            m3.metric("Pérdida Ralentí", f"$ {df_historico['Costo_Ralenti_ARS'].sum():,.0f}")
+
+            st.markdown("---")
+
+            # 3. ALERTAS DE DESVÍO INTELIGENTES (> 15 Litros)
+            # Filtramos los desvíos importantes (en valor absoluto para detectar faltantes o excesos)
+            alertas = df_historico[df_historico["Desvio_Neto"].abs() > 15].tail(5) # Mostramos las últimas 5
+            
+            if not alertas.empty:
+                st.subheader("⚠️ Alertas de Desvío Crítico (>15L)")
+                for _, fila in alertas.iterrows():
+                    st.error(f"**Móvil {fila['Movil']}** | Chofer: {fila['Chofer']} | **Desvío: {fila['Desvio_Neto']} L** | Fecha: {fila['Fecha']}")
+                st.markdown("---")
+
+            # 4. RANKING DE EFICIENCIA Y COMPARATIVA DE MARCAS
+            col_rank, col_marca = st.columns(2)
+
+            with col_rank:
+                st.subheader("🏆 Top 3 Choferes Eficientes")
+                # El más eficiente es el que tiene menor consumo promedio L/100km
+                ranking = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
+                for i, row in ranking.iterrows():
+                    st.success(f"{i+1}º - {row['Chofer']} ({row['Consumo_L100']:.2f} L/100km)")
+
+            with col_marca:
+                st.subheader("🚛 Consumo Promedio por Marca")
+                df_marca = df_historico.groupby("Marca")["Consumo_L100"].mean().reset_index()
+                fig_marca = px.pie(df_marca, values='Consumo_L100', names='Marca', 
+                                   color='Marca', color_discrete_map={'SCANIA':'#FF4B4B', 'MERCEDES BENZ':'#0068C9'},
+                                   hole=0.4, template="plotly_dark")
+                st.plotly_chart(fig_marca, use_container_width=True)
+
+            # 5. GRÁFICOS DETALLADOS
+            st.markdown("---")
+            g1, g2 = st.columns(2)
+            
+            with g1:
+                st.subheader("📉 Costo de Ralentí por Chofer")
+                fig_ral = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", template="plotly_dark")
+                st.plotly_chart(fig_ral, use_container_width=True)
+                
+            with g2:
+                st.subheader("📍 Eficiencia por Traza (L/100km)")
+                df_traza = df_historico.groupby("Traza")["Consumo_L100"].mean().reset_index()
+                fig_traza = px.bar(df_traza, x="Traza", y="Consumo_L100", color="Traza", template="plotly_dark")
+                st.plotly_chart(fig_traza, use_container_width=True)
+
+            # 6. HISTORIAL COMPLETO
+            st.subheader("📝 Registro Histórico")
+            st.dataframe(df_historico.iloc[::-1], use_container_width=True)       
