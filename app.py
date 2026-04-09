@@ -15,7 +15,7 @@ st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 3. DEFINICIÓN DE FUNCIONES (Deben ir antes de usarse) ---
+# --- 3. DEFINICIÓN DE FUNCIONES ---
 
 def obtener_datos():
     try:
@@ -35,6 +35,7 @@ def generar_comprobante_pdf(datos):
     pdf.line(10, 35, 200, 35)
     pdf.ln(5)
     pdf.set_font("Arial", size=11)
+    # Usamos items() para recorrer el diccionario de datos
     for clave, valor in datos.items():
         pdf.set_font("Arial", "B", 11)
         pdf.cell(50, 8, f"{clave}:", border="B")
@@ -46,15 +47,15 @@ def generar_comprobante_pdf(datos):
     return pdf.output()
 
 def check_password():
-    """Retorna True si el usuario introdujo la contraseña correcta."""
     if "password_correct" not in st.session_state:
         st.title("🔐 Acceso Sistema de Flota")
-        st.text_input("Usuario", key="username")
-        st.text_input("Contraseña", type="password", key="password")
+        # Agregamos placeholders para evitar campos vacíos
+        st.text_input("Usuario", key="username", placeholder="Ej: ema_admin")
+        st.text_input("Contraseña", type="password", key="password", placeholder="****")
         if st.button("Ingresar"):
             usuarios_validos = {"ema_admin": "jujuy2024", "operador": "flota123"}
-            user = st.session_state["username"]
-            pwd = st.session_state["password"]
+            user = st.session_state.get("username", "")
+            pwd = st.session_state.get("password", "")
             if user in usuarios_validos and usuarios_validos[user] == pwd:
                 st.session_state["password_correct"] = True
                 st.session_state["user_role"] = "admin" if user == "ema_admin" else "operador"
@@ -64,12 +65,14 @@ def check_password():
         return False
     return True
 
-# --- 4. PROGRAMA PRINCIPAL (Llamada a las funciones) ---
+# --- 4. PROGRAMA PRINCIPAL ---
 
 if check_password():
-    df_historico = obtener_datos()
+    # USAMOS .get() PARA EVITAR EL KEYERROR
+    user_logueado = st.session_state.get("username", "ADMIN").upper()
     role = st.session_state.get("user_role", "operador")
-    user_logueado = st.session_state["username"].upper()
+    
+    df_historico = obtener_datos()
 
     # Sidebar
     st.sidebar.success(f"👤 {user_logueado}")
@@ -79,21 +82,19 @@ if check_password():
     menu = st.sidebar.selectbox("Menú Principal", opciones, key="menu_unico")
 
     if st.sidebar.button("🚪 Cerrar Sesión"):
-        for key in list(st.session_state.keys()): del st.session_state[key]
+        for key in list(st.session_state.keys()): 
+            del st.session_state[key]
         st.rerun()
 
     # --- LÓGICA DE MENÚ ---
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
         
-        # Simulación de carga de choferes (puedes reemplazar con tu excel)
-        lista_choferes = ["Chofer 1", "Chofer 2", "Chofer 3"] 
-        
         with st.form("form_carga"):
             col1, col2 = st.columns(2)
             with col1:
                 fecha = st.date_input("Fecha", datetime.now())
-                chofer = st.selectbox("Chofer", lista_choferes)
+                chofer = st.text_input("Nombre del Chofer") # Text input para simplificar
                 movil = st.selectbox("Móvil", list(range(1, 101)))
                 marca = st.radio("Marca", ["Scania", "Mercedes"])
                 ruta = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
@@ -110,12 +111,13 @@ if check_password():
         if btn_guardar:
             if km_fin <= km_ini:
                 st.error("❌ El KM Final debe ser mayor.")
+            elif l_ticket <= 0:
+                st.error("❌ Los litros deben ser mayores a 0.")
             else:
                 km_recorr = km_fin - km_ini
                 consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
                 costo_total = l_ticket * precio_litro
                 
-                # Datos para el PDF
                 datos_viaje = {
                     "Fecha": str(fecha), "Chofer": chofer, "Movil": movil,
                     "Marca": marca, "Ruta": ruta, "Traza": traza,
@@ -123,18 +125,28 @@ if check_password():
                     "Consumo": f"{round(consumo, 2)} L/100km", "Costo": f"${costo_total:,.2f}"
                 }
                 
-                # Guardar (Simulado aquí, usa tu lógica de conn.update)
-                st.success("✅ Registro guardado en Sheets.")
-                
-                # Generar PDF
-                pdf_bytes = generar_comprobante_pdf(datos_viaje)
-                st.download_button(
-                    label="📥 DESCARGAR COMPROBANTE PDF",
-                    data=bytes(pdf_bytes),
-                    file_name=f"Viaje_M{movil}_{fecha}.pdf",
-                    mime="application/pdf"
-                )
+                # Sincronización con Sheets
+                try:
+                    # Agregamos los cálculos al dataframe para el historial
+                    nuevo_df = pd.DataFrame([datos_viaje])
+                    df_final = pd.concat([df_historico, nuevo_df], ignore_index=True)
+                    conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
+                    st.success("✅ Registro guardado en la nube.")
+                    
+                    # Generar PDF
+                    pdf_bytes = generar_comprobante_pdf(datos_viaje)
+                    st.download_button(
+                        label="📥 DESCARGAR COMPROBANTE PDF",
+                        data=bytes(pdf_bytes),
+                        file_name=f"Viaje_M{movil}_{fecha}.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Error al guardar: {e}")
 
     elif menu == "Análisis IA & Dashboard":
         st.header("📊 Inteligencia de Flota")
-        st.dataframe(df_historico.iloc[::-1])
+        if not df_historico.empty:
+            st.dataframe(df_historico.iloc[::-1])
+        else:
+            st.info("No hay datos históricos para mostrar.")
