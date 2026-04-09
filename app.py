@@ -49,27 +49,27 @@ if "auth" not in st.session_state:
             else: st.error("❌")
     st.stop()
 
-# --- 3. CARGA DE LISTAS ---
+# --- 3. CARGA DE DATOS Y LISTAS ---
 df_h = obtener_datos()
 lista_choferes = obtener_choferes_repo()
 
-# Lógica de Trazas
 trazas_existentes = ["➕ NUEVA TRAZA"]
 if not df_h.empty and "Traza" in df_h.columns:
     trazas_db = sorted(df_h["Traza"].unique().tolist())
     trazas_existentes.extend(trazas_db)
 
 # --- 4. INTERFAZ ---
-st.title("🚛 Inteligencia de Flota y Costos")
+st.title("🚚 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Historial Completo"])
 
 # --- PESTAÑA REGISTRO ---
 with tabs[0]:
-    st.subheader("📝 Formulario de Carga")
-    with st.form("registro", clear_on_submit=True):
+    st.subheader("📝 Formulario de Registro")
+    with st.form("registro_final", clear_on_submit=True):
         
-        c_precio, _ = st.columns([1, 2])
-        precio_gasoil = c_precio.number_input("💵 Precio Litro Gasoil ($)", min_value=0.0, value=1100.0)
+        c_p, _ = st.columns([1, 2])
+        # ESTE VALOR ES EL QUE SE USA PARA EL CÁLCULO
+        precio_gasoil = c_p.number_input("💵 Precio Gasoil por Litro ($)", min_value=0.0, value=1100.0)
         
         st.divider()
         
@@ -82,15 +82,11 @@ with tabs[0]:
         with f2:
             marca = st.radio("🚛 Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            
-            # CORRECCIÓN DE TRAZA:
             traza_sel = st.selectbox("📍 Seleccionar Traza", trazas_existentes)
-            # Siempre mostramos el input si elige "Nueva" o si la lista está vacía
-            nueva_traza_input = ""
+            nueva_traza = ""
             if traza_sel == "➕ NUEVA TRAZA":
-                nueva_traza_input = st.text_input("✍️ Escribir Nombre de Nueva Traza").upper()
-            
-            traza_final = nueva_traza_input if traza_sel == "➕ NUEVA TRAZA" else traza_sel
+                nueva_traza = st.text_input("✍️ Escribir Nueva Traza").upper()
+            traza_final = nueva_traza if traza_sel == "➕ NUEVA TRAZA" else traza_sel
 
         with f3:
             kmi = st.number_input("🛣️ KM Inicial", min_value=0)
@@ -99,12 +95,14 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero", min_value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", min_value=0.0)
         
-        # Cálculos en tiempo real para el usuario
+        # --- LÓGICA DE CÁLCULO REVISADA ---
         recorrido = kmf - kmi
         consumo = (lt / recorrido * 100) if recorrido > 0 else 0
         desvio = lt - (ltab + lral)
+        costo_total = lt * precio_gasoil
+        costo_ralenti = lral * precio_gasoil
         
-        st.info(f"💡 **Resumen:** {recorrido} km recorridos | Consumo: {consumo:.2f} L/100 | Desvío: {desvio:.2f} L")
+        st.info(f"📊 **Cálculo:** {recorrido} km | {consumo:.2f} L/100 | Costo Total: $ {costo_total:,.2f}")
         
         if st.form_submit_button("💾 GUARDAR REGISTRO"):
             if kmf > kmi and lt > 0 and traza_final not in ["", "➕ NUEVA TRAZA"]:
@@ -113,47 +111,31 @@ with tabs[0]:
                     "Chofer": chofer, "Movil": movil, "Marca": marca, "Ruta": ruta_tipo, 
                     "Traza": traza_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": recorrido, 
                     "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Desvio_Neto": round(desvio, 2), "Consumo_L100": round(consumo, 2),
-                    "Costo_Total_ARS": round(lt * precio_gasoil, 2), 
-                    "Costo_Ralenti_ARS": round(lral * precio_gasoil, 2)
+                    "Desvio_Neto": round(desvio, 2), 
+                    "Consumo_L100": round(consumo, 2),
+                    "Costo_Total_ARS": round(costo_total, 2), 
+                    "Costo_Ralenti_ARS": round(costo_ralenti, 2)
                 }
                 df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success("✅ ¡Datos guardados con éxito!")
+                st.success(f"✅ Guardado. Costo calculado: $ {costo_total:,.2f}")
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("⚠️ Error: Verificá los KM, los Litros o que hayas escrito el nombre de la Nueva Traza.")
+                st.error("⚠️ Error: Revisá los KM o que la Traza tenga nombre.")
 
 # --- PESTAÑA IA ---
 with tabs[1]:
-    st.subheader("🦅 Análisis Ojo de Halcón")
+    st.subheader("🦅 Inteligencia de Flota")
     if not df_h.empty:
         m1, m2, m3 = st.columns(3)
         m1.metric("💰 Gasto Total", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
         m2.metric("🛑 Pérdida Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
         m3.metric("📉 Promedio Flota", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
-        
-        st.divider()
-        g1, g2 = st.columns(2)
-        with g1:
-            st.subheader("🏆 Ranking Eco-Driving")
-            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
-            for i, r in rank.iterrows():
-                st.write(f"{['🥇','🥈','🥉','👤','👤'][i]} **{r['Chofer']}**: {r['Consumo_L100']:.2f}")
-        with g2:
-            st.subheader("🚨 Alertas de Desvío (>50L)")
-            alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
-            for _, r in alertas.iterrows():
-                if abs(r['Desvio_Neto']) > 50:
-                    st.error(f"⚠️ **{r['Chofer']}**: {r['Desvio_Neto']:.1f} Litros")
-                else:
-                    st.write(f"✅ **{r['Chofer']}**: {r['Desvio_Neto']:.1f} L (Bajo control)")
-    else: st.info("No hay datos para analizar.")
+    else: st.info("Sin datos.")
 
 # --- PESTAÑA HISTORIAL ---
 with tabs[2]:
-    st.subheader("📜 Historial de Cargas")
+    st.subheader("📜 Historial Completo")
     if not df_h.empty:
         st.dataframe(df_h.iloc[::-1], use_container_width=True)
-        st.download_button("📥 Descargar Excel (CSV)", df_h.to_csv(index=False), "control_flota.csv")
