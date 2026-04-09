@@ -12,7 +12,7 @@ st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 
 # --- 2. CONEXIÓN ---
 # ⚠️ REEMPLAZA CON TU URL
-SPREADSHEET_URL = "TU_LINK_DE_GOOGLE_SHEETS_AQUI"
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- 3. DEFINICIÓN DE FUNCIONES (Deben ir antes de usarse) ---
