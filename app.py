@@ -11,7 +11,7 @@ st.set_page_config(page_title="Control de Flota Inteligente", layout="wide")
 
 # --- CONEXIÓN A GOOGLE SHEETS ---
 # ⚠️ REEMPLAZA CON TU URL DE GOOGLE SHEETS ⚠️
-SPREADSHEET_URL = "TU_LINK_DE_GOOGLE_SHEETS_AQUI"
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
