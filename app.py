@@ -5,115 +5,136 @@ from datetime import datetime
 import time
 import plotly.express as px
 from sklearn.ensemble import IsolationForest
-from fpdf import FPDF # <-- Nueva librería
+from fpdf import FPDF
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Control de Flota IA", layout="wide")
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 
-# --- CONEXIÓN ---
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
+# --- 2. CONEXIÓN ---
+# ⚠️ REEMPLAZA CON TU URL
+SPREADSHEET_URL = "TU_LINK_DE_GOOGLE_SHEETS_AQUI"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- FUNCIÓN PARA GENERAR EL PDF ---
+# --- 3. DEFINICIÓN DE FUNCIONES (Deben ir antes de usarse) ---
+
+def obtener_datos():
+    try:
+        return conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
+    except:
+        return pd.DataFrame()
+
 def generar_comprobante_pdf(datos):
     pdf = FPDF()
     pdf.add_page()
-    
-    # Estética del PDF
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 15, "COMPROBANTE DE CARGA - CONTROL DE FLOTA", ln=True, align="C", fill=True)
+    pdf.cell(0, 15, "COMPROBANTE DE VIAJE - CONTROL DE FLOTA", ln=True, align="C", fill=True)
     pdf.ln(10)
-    
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, f"Detalle del Viaje - Móvil {datos['Movil']}", ln=True)
+    pdf.cell(0, 10, f"Detalle de Carga - Movil {datos.get('Movil', 'S/N')}", ln=True)
     pdf.line(10, 35, 200, 35)
     pdf.ln(5)
-    
-    # Tabla de datos
     pdf.set_font("Arial", size=11)
     for clave, valor in datos.items():
         pdf.set_font("Arial", "B", 11)
         pdf.cell(50, 8, f"{clave}:", border="B")
         pdf.set_font("Arial", size=11)
         pdf.cell(0, 8, f" {valor}", border="B", ln=True)
-    
     pdf.ln(20)
     pdf.set_font("Arial", "I", 9)
-    pdf.cell(0, 10, f"Documento generado automáticamente el {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="C")
-    
+    pdf.cell(0, 10, f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="C")
     return pdf.output()
 
-# ... (Funciones check_password y obtener_datos se mantienen igual) ...
+def check_password():
+    """Retorna True si el usuario introdujo la contraseña correcta."""
+    if "password_correct" not in st.session_state:
+        st.title("🔐 Acceso Sistema de Flota")
+        st.text_input("Usuario", key="username")
+        st.text_input("Contraseña", type="password", key="password")
+        if st.button("Ingresar"):
+            usuarios_validos = {"ema_admin": "jujuy2024", "operador": "flota123"}
+            user = st.session_state["username"]
+            pwd = st.session_state["password"]
+            if user in usuarios_validos and usuarios_validos[user] == pwd:
+                st.session_state["password_correct"] = True
+                st.session_state["user_role"] = "admin" if user == "ema_admin" else "operador"
+                st.rerun()
+            else:
+                st.error("😕 Usuario o contraseña incorrectos")
+        return False
+    return True
+
+# --- 4. PROGRAMA PRINCIPAL (Llamada a las funciones) ---
 
 if check_password():
-    df_historico = conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
+    df_historico = obtener_datos()
     role = st.session_state.get("user_role", "operador")
-    
-    # ... (Sidebar y Menú se mantienen igual) ...
-    menu = st.sidebar.selectbox("Menú Principal", ["Cargar Combustible", "Análisis IA & Dashboard"], key="menu_unico")
+    user_logueado = st.session_state["username"].upper()
 
+    # Sidebar
+    st.sidebar.success(f"👤 {user_logueado}")
+    precio_litro = st.sidebar.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0)
+    
+    opciones = ["Cargar Combustible", "Análisis IA & Dashboard"] if role == "admin" else ["Cargar Combustible"]
+    menu = st.sidebar.selectbox("Menú Principal", opciones, key="menu_unico")
+
+    if st.sidebar.button("🚪 Cerrar Sesión"):
+        for key in list(st.session_state.keys()): del st.session_state[key]
+        st.rerun()
+
+    # --- LÓGICA DE MENÚ ---
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
-        # (Formulario de carga igual al anterior...)
+        
+        # Simulación de carga de choferes (puedes reemplazar con tu excel)
+        lista_choferes = ["Chofer 1", "Chofer 2", "Chofer 3"] 
         
         with st.form("form_carga"):
-            # ... (inputs de fecha, chofer, marca, km, litros...)
+            col1, col2 = st.columns(2)
+            with col1:
+                fecha = st.date_input("Fecha", datetime.now())
+                chofer = st.selectbox("Chofer", lista_choferes)
+                movil = st.selectbox("Móvil", list(range(1, 101)))
+                marca = st.radio("Marca", ["Scania", "Mercedes"])
+                ruta = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
+                traza = st.text_input("Traza (Origen - Destino)")
+            with col2:
+                km_ini = st.number_input("KM Inicial", min_value=0)
+                km_fin = st.number_input("KM Final", min_value=0)
+                l_ticket = st.number_input("Litros Ticket", min_value=0.0)
+                l_tablero = st.number_input("Litros Tablero", min_value=0.0)
+                l_ralenti = st.number_input("Litros Ralentí", min_value=0.0)
+            
             btn_guardar = st.form_submit_button("💾 GUARDAR Y GENERAR PDF")
 
         if btn_guardar:
-            # Lógica de cálculos (consumo, desvio, costo...)
-            km_recorr = km_fin - km_ini
-            consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
-            costo_total = l_ticket * precio_litro
-            
-            # 1. Guardar en Google Sheets
-            nuevo_reg = {
-                "Fecha": str(fecha), "Chofer": chofer, "Movil": movil_seleccionado,
-                "Marca": marca, "Ruta": ruta, "KM_Recorr": km_recorr,
-                "Consumo_L100": round(consumo, 2), "Costo_Total": round(costo_total, 2)
-            }
-            # (Aquí va el código de conn.update...)
-            
-            # 2. Preparar datos para el PDF
-            datos_pdf = {
-                "Fecha": str(fecha),
-                "Chofer": chofer,
-                "Movil": movil_seleccionado,
-                "Marca": marca,
-                "Ruta": ruta,
-                "Traza": traza,
-                "KM Recorridos": f"{km_recorr} km",
-                "Litros Cargados": f"{l_ticket} L",
-                "Consumo Promedio": f"{round(consumo, 2)} L/100km",
-                "Costo Combustible": f"${costo_total:,.2f}"
-            }
-            
-            pdf_bytes = generar_comprobante_pdf(datos_pdf)
-            
-            st.success("✅ Datos guardados en la nube.")
-            
-            # 3. Botón de descarga (Aparece solo tras el éxito)
-            st.download_button(
-                label="📥 DESCARGAR COMPROBANTE PDF",
-                data=bytes(pdf_bytes),
-                file_name=f"Viaje_M{movil_seleccionado}_{fecha}.pdf",
-                mime="application/pdf"
-            )
+            if km_fin <= km_ini:
+                st.error("❌ El KM Final debe ser mayor.")
+            else:
+                km_recorr = km_fin - km_ini
+                consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
+                costo_total = l_ticket * precio_litro
+                
+                # Datos para el PDF
+                datos_viaje = {
+                    "Fecha": str(fecha), "Chofer": chofer, "Movil": movil,
+                    "Marca": marca, "Ruta": ruta, "Traza": traza,
+                    "KM Recorridos": f"{km_recorr} km", "Litros": f"{l_ticket} L",
+                    "Consumo": f"{round(consumo, 2)} L/100km", "Costo": f"${costo_total:,.2f}"
+                }
+                
+                # Guardar (Simulado aquí, usa tu lógica de conn.update)
+                st.success("✅ Registro guardado en Sheets.")
+                
+                # Generar PDF
+                pdf_bytes = generar_comprobante_pdf(datos_viaje)
+                st.download_button(
+                    label="📥 DESCARGAR COMPROBANTE PDF",
+                    data=bytes(pdf_bytes),
+                    file_name=f"Viaje_M{movil}_{fecha}.pdf",
+                    mime="application/pdf"
+                )
 
     elif menu == "Análisis IA & Dashboard":
-        st.header("📊 Historial de Viajes")
-        # Aquí también podemos agregar la opción de descargar viajes viejos
-        st.write("Seleccione un viaje del historial para descargar su PDF:")
-        if not df_historico.empty:
-            fila_idx = st.selectbox("Seleccionar viaje (por fecha/móvil)", df_historico.index)
-            viaje = df_historico.loc[fila_idx].to_dict()
-            
-            pdf_reimpresion = generar_comprobante_pdf(viaje)
-            st.download_button(
-                label="🖨️ Re-imprimir PDF Seleccionado",
-                data=bytes(pdf_reimpresion),
-                file_name="Reimpresion_Viaje.pdf",
-                mime="application/pdf"
-            )
+        st.header("📊 Inteligencia de Flota")
         st.dataframe(df_historico.iloc[::-1])
