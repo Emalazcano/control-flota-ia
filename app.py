@@ -126,75 +126,91 @@ with tabs[0]:
                 time.sleep(1)
                 st.rerun()
 
-# --- TAB 2: OJO DE HALCÓN (DASHBOARD FINAL REVISADO) ---
+# --- TAB 2: OJO DE HALCÓN (REDiseño VISUAL COMPLETO) ---
 with tabs[1]:
     if not df_h.empty:
-        # 3) PROMEDIO GENERAL DE FLOTA
-        st.markdown("### 🦅 Estado General de la Flota")
+        # 3) PROMEDIO GENERAL DE FLOTA (Tarjetas Superiores)
+        st.markdown("### 🦅 Inteligencia de Flota")
         m1, m2, m3 = st.columns(3)
-        prom_gral = df_h['Consumo_L100'].mean()
-        m1.metric("📉 Promedio General Flota", f"{prom_gral:,.1f} L/100")
-        m2.metric("⛽ Total Combustible (L)", f"{df_h['L_Ticket'].sum():,.0f} L")
-        m3.metric("💰 Gasto Total Acumulado", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
-        
+        with m1:
+            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:10px; border-left: 5px solid #636EFA; text-align:center;">'
+                        f'<p style="margin:0; color:#aab;">Promedio General</p>'
+                        f'<h2 style="margin:0; color:white;">{df_h["Consumo_L100"].mean():,.1f} <span style="font-size:15px;">L/100</span></h2></div>', unsafe_allow_html=True)
+        with m2:
+            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:10px; border-left: 5px solid #00CC96; text-align:center;">'
+                        f'<p style="margin:0; color:#aab;">Total Combustible</p>'
+                        f'<h2 style="margin:0; color:white;">{df_h["L_Ticket"].sum():,.0f} <span style="font-size:15px;">Litros</span></h2></div>', unsafe_allow_html=True)
+        with m3:
+            st.markdown(f'<div style="background:#1e2130; padding:20px; border-radius:10px; border-left: 5px solid #EF553B; text-align:center;">'
+                        f'<p style="margin:0; color:#aab;">Gasto Acumulado</p>'
+                        f'<h2 style="margin:0; color:white;">$ {df_h["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
+
         st.divider()
 
-        # 1) RANKING DE CHOFERES CON PROMEDIO POR RUTA
-        st.markdown("### 🏆 Cuadro de Honor: Promedio por Ruta")
-        c_ruta1, c_ruta2 = st.columns(2)
+        # 1) CUADRO DE HONOR CON MEDALLAS (Ranking Choferes)
+        st.markdown("### 🏆 Cuadro de Honor: Mejores Promedios")
+        top_3 = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
+        medallas = ["🥇", "🥈", "🥉"]
+        col_med1, col_med2, col_med3 = st.columns(3)
         
-        with c_ruta1:
-            st.markdown('<div style="background:#1e2130; padding:10px; border-radius:8px; text-align:center; border:1px solid #3d425a;">🛣️ RUTA: LLANO</div>', unsafe_allow_html=True)
+        for i, row in top_3.iterrows():
+            with [col_med1, col_med2, col_med3][i]:
+                st.markdown(f"""
+                    <div style="background: linear-gradient(145deg, #1e2130, #25293d); padding: 25px; border-radius: 15px; text-align: center; border: 1px solid #3d425a;">
+                        <div style="font-size: 50px;">{medallas[i]}</div>
+                        <div style="font-weight: bold; font-size: 18px; color: white; margin-top:10px;">{row['Chofer']}</div>
+                        <div style="font-size: 32px; color: #4CAF50; font-weight: bold;">{row['Consumo_L100']:.1f}</div>
+                        <div style="color: #aab; font-size: 14px;">L/100 KM</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.divider()
+
+        # 1.1) DETALLE POR RUTA
+        st.markdown("##### 📍 Rendimiento por Tipo de Ruta")
+        cr1, cr2 = st.columns(2)
+        with cr1:
+            st.markdown('<p style="text-align:center; color:#00CC96;">🟢 RUTA: LLANO</p>', unsafe_allow_html=True)
             df_llano = df_h[df_h["Ruta"] == "Llano"].groupby("Chofer")["Consumo_L100"].mean().sort_values().reset_index()
-            if not df_llano.empty:
-                st.dataframe(df_llano.rename(columns={"Consumo_L100": "L/100 Prom"}), use_container_width=True, hide_index=True)
-            else: st.info("Sin registros en Llano")
-
-        with c_ruta2:
-            st.markdown('<div style="background:#1e2130; padding:10px; border-radius:8px; text-align:center; border:1px solid #3d425a;">🏔️ RUTA: ALTA MONTAÑA</div>', unsafe_allow_html=True)
+            st.dataframe(df_llano.rename(columns={"Consumo_L100": "Promedio L/100"}), use_container_width=True, hide_index=True)
+        with cr2:
+            st.markdown('<p style="text-align:center; color:#EF553B;">🔴 RUTA: ALTA MONTAÑA</p>', unsafe_allow_html=True)
             df_montana = df_h[df_h["Ruta"] == "Alta Montaña"].groupby("Chofer")["Consumo_L100"].mean().sort_values().reset_index()
-            if not df_montana.empty:
-                st.dataframe(df_montana.rename(columns={"Consumo_L100": "L/100 Prom"}), use_container_width=True, hide_index=True)
-            else: st.info("Sin registros en Alta Montaña")
+            st.dataframe(df_montana.rename(columns={"Consumo_L100": "Promedio L/100"}), use_container_width=True, hide_index=True)
 
         st.divider()
 
-        # 2) DESVÍO DE COMBUSTIBLE (TOLERANCIA 50L)
-        st.markdown("### ⚠️ Control de Desvíos (Tolerancia 50L)")
+        # 2) DESVÍO CON TOLERANCIA (Visualización Limpia)
+        st.markdown("### ⚠️ Control de Desvíos de Combustible")
         desvio_ch = df_h.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
-        desvio_ch["Estado"] = desvio_ch["Desvio_Neto"].apply(lambda x: "🚨 EXCESO" if x > 50 else "✅ NORMAL")
+        desvio_ch["Alerta"] = desvio_ch["Desvio_Neto"].apply(lambda x: "🚨 EXCESO (>50L)" if x > 50 else "✅ DENTRO DE LÍMITE")
         
         fig_desvio = px.bar(desvio_ch, x="Desvio_Neto", y="Chofer", orientation='h',
-                            color="Estado", 
-                            color_discrete_map={"🚨 EXCESO": "#FF4B4B", "✅ NORMAL": "#00CC96"},
-                            template="plotly_dark")
-        # Línea de tolerancia de 50 litros
-        fig_desvio.add_vline(x=50, line_dash="dash", line_color="yellow", annotation_text="Límite 50L")
+                            color="Alerta", color_discrete_map={"🚨 EXCESO (>50L)": "#FF4B4B", "✅ DENTRO DE LÍMITE": "#00CC96"},
+                            template="plotly_dark", barmode="group")
+        fig_desvio.add_vline(x=50, line_dash="dash", line_color="#FFD700", annotation_text="Límite 50L")
+        fig_desvio.update_layout(showlegend=True, margin=dict(l=20, r=20, t=30, b=20))
         st.plotly_chart(fig_desvio, use_container_width=True)
 
         st.divider()
 
-        col_rank1, col_rank2 = st.columns(2)
-
-        # 4) RANKING DE PROMEDIO DE LAS UNIDADES (MÓVILES)
-        with col_rank1:
-            st.markdown("##### 🔢 Ranking Eficiencia por Móvil (Top 10)")
+        # 4 y 5) RANKING UNIDADES Y RALENTÍ
+        col_f1, col_f2 = st.columns(2)
+        
+        with col_f1:
+            st.markdown("##### 🔢 Eficiencia por Unidad (Móviles)")
             rank_movil = df_h.groupby("Movil")["Consumo_L100"].mean().sort_values().head(10).reset_index()
-            fig_movil = px.bar(rank_movil, x="Consumo_L100", y="Movil", orientation='h',
-                               color="Consumo_L100", color_continuous_scale="Viridis",
-                               template="plotly_dark")
-            fig_movil.update_layout(yaxis={'type':'category'}) 
-            st.plotly_chart(fig_movil, use_container_width=True)
+            fig_mov = px.bar(rank_movil, x="Consumo_L100", y="Movil", orientation='h',
+                             color="Consumo_L100", color_continuous_scale="GnBu_r", template="plotly_dark")
+            fig_mov.update_layout(yaxis={'type':'category'})
+            st.plotly_chart(fig_mov, use_container_width=True)
 
-        # 5) RANKING DE RALENTÍ POR CHOFERES
-        with col_rank2:
-            st.markdown("##### ⏳ Uso de Ralentí por Chofer (Litros)")
-            rank_ralenti = df_h.groupby("Chofer")["L_Ralenti"].sum().sort_values(ascending=False).head(10).reset_index()
-            # Ordenamos para que el que más gasta esté arriba
-            fig_ral = px.bar(rank_ralenti, x="L_Ralenti", y="Chofer", 
-                             color="L_Ralenti", color_continuous_scale="Reds",
-                             template="plotly_dark")
+        with col_f2:
+            st.markdown("##### ⏳ Pérdida por Ralentí Acumulado")
+            rank_ral = df_h.groupby("Chofer")["L_Ralenti"].sum().sort_values(ascending=False).head(10).reset_index()
+            fig_ral = px.bar(rank_ral, x="L_Ralenti", y="Chofer", orientation='h',
+                             color="L_Ralenti", color_continuous_scale="Reds", template="plotly_dark")
             st.plotly_chart(fig_ral, use_container_width=True)
 
     else:
-        st.warning("Aún no hay datos para mostrar el análisis.")
+        st.info("Sin datos para el Dashboard.")
