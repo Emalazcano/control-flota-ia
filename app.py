@@ -148,55 +148,44 @@ st.set_page_config(page_title="Control de Flota Seguro", layout="wide")
 
 # --- FUNCIÓN DE LOGIN ---
 def check_password():
-    """Retorna True si el usuario introdujo la contraseña correcta."""
-    def password_entered():
-        # Verificación básica (puedes cambiar los nombres y claves aquí)
-        usuarios_validos = {
-            "ema_admin": "jujuy2024",
-            "operador": "flota123"
-        }
-        user = st.session_state["username"]
-        pwd = st.session_state["password"]
-        
-        if user in usuarios_validos and usuarios_validos[user] == pwd:
-            st.session_state["password_correct"] = True
-            st.session_state["user_role"] = "admin" if user == "ema_admin" else "operador"
-            del st.session_state["password"]  # No guardar la clave en el estado
-        else:
-            st.session_state["password_correct"] = False
-
     if "password_correct" not in st.session_state:
-        # Pantalla de inicio de sesión
         st.title("🔐 Acceso Sistema de Flota")
-        st.text_input("Usuario", on_change=None, key="username")
-        st.text_input("Contraseña", type="password", on_change=None, key="password")
-        st.button("Ingresar", on_click=password_entered)
+        st.text_input("Usuario", key="username")
+        st.text_input("Contraseña", type="password", key="password")
+        if st.button("Ingresar"):
+            usuarios_validos = {
+                "ema_admin": "jujuy2024",
+                "operador": "flota123"
+            }
+            user = st.session_state["username"]
+            pwd = st.session_state["password"]
+            
+            if user in usuarios_validos and usuarios_validos[user] == pwd:
+                st.session_state["password_correct"] = True
+                st.session_state["user_role"] = "admin" if user == "ema_admin" else "operador"
+                st.rerun()
+            else:
+                st.error("😕 Usuario o contraseña incorrectos")
         return False
-    elif not st.session_state["password_correct"]:
-        st.error("😕 Usuario o contraseña incorrectos")
-        st.text_input("Usuario", on_change=None, key="username")
-        st.text_input("Contraseña", type="password", on_change=None, key="password")
-        st.button("Ingresar", on_click=password_entered)
-        return False
-    else:
-        return True
+    return True
 
 # --- INICIO DEL PROGRAMA ---
 if check_password():
-    # Aquí va todo tu código anterior...
-    role = st.session_state["user_role"]
+    role = st.session_state.get("user_role", "operador")
     
-    st.sidebar.success(f"Conectado como: {st.session_state['username'].upper()}")
+    st.sidebar.success(f"Usuario: {st.session_state['username'].upper()}")
     if st.sidebar.button("Cerrar Sesión"):
-        del st.session_state["password_correct"]
+        for key in st.session_state.keys():
+            del st.session_state[key]
         st.rerun()
 
-    # --- LÓGICA DE MENÚ BASADA EN ROL ---
+    # Definir opciones según rol
     if role == "admin":
         menu_options = ["Cargar Combustible", "Calculadora de Flete (IA)", "Análisis IA & Dashboard"]
     else:
-        menu_options = ["Cargar Combustible"] # El operador solo ve la carga
+        menu_options = ["Cargar Combustible"]
     
-    menu = st.sidebar.selectbox("Menú", menu_options)
+    # AQUÍ ESTÁ EL CAMBIO: El 'key' evita el error de duplicado
+    menu = st.sidebar.selectbox("Menú", menu_options, key="menu_principal")
 
-    # ... Resto del código (obtener_datos, formularios, etc.) ...
+    # Luego siguen tus bloques 'if menu == ...'
