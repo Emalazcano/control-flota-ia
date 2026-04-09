@@ -130,22 +130,41 @@ with tab_ia:
 
         # Gráficos organizados
         g1, g2 = st.columns(2)
+        
         with g1:
-            st.subheader("🏆 Top 5 Choferes Eco-Driving")
-            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
-            fig_r = px.bar(rank, x="Consumo_L100", y="Chofer", orientation='h', color="Consumo_L100", template="plotly_dark")
-            st.plotly_chart(fig_r, use_container_width=True)
+            st.subheader("🏆 Top Choferes Eco-Driving")
+            # Agrupamos por chofer y calculamos el promedio de consumo
+            # El más eficiente es el que tiene el número más bajo (menor consumo)
+            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().reset_index()
+            
+            # Contenedor para las medallas
+            for i, r in rank.head(5).iterrows():
+                # Asignamos el emoji según la posición
+                if i == 0:
+                    medalla = "🥇"
+                    color = "gold"
+                elif i == 1:
+                    medalla = "🥈"
+                    color = "silver"
+                elif i == 2:
+                    medalla = "🥉"
+                    color = "#cd7f32" # Bronce
+                else:
+                    medalla = "👤"
+                    color = "white"
+                
+                # Mostramos cada chofer con una barra de progreso o texto destacado
+                st.markdown(f"""
+                <div style="background-color: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; margin-bottom: 5px; border-left: 5px solid {color};">
+                    <span style="font-size: 20px;">{medalla}</span> 
+                    <b>{r['Chofer']}</b> <br>
+                    <small>Promedio: {r['Consumo_L100']:.2f} L/100km</small>
+                </div>
+                """, unsafe_allow_html=True)
+                
         with g2:
-            st.subheader("📉 Dispersión de Desvíos (Ticket vs Tablero)")
-            fig_d = px.scatter(df_h, x="Fecha", y="Desvio_Neto", color="Marca", size="L_Ticket", template="plotly_dark")
+            st.subheader("📉 Dispersión de Desvíos")
+            # Mantenemos el gráfico de dispersión que te ayuda a ver los "puntos fuera de lugar"
+            fig_d = px.scatter(df_h, x="Fecha", y="Desvio_Neto", color="Marca", 
+                               hover_name="Chofer", size="L_Ticket", template="plotly_dark")
             st.plotly_chart(fig_d, use_container_width=True)
-    else:
-        st.info("Sin datos para analizar.")
-
-# --- PESTAÑA 3: HISTORIAL ---
-with tab_historial:
-    st.subheader("Registro Histórico de Operaciones")
-    if not df_h.empty:
-        st.dataframe(df_h.iloc[::-1], use_container_width=True)
-        # Opción de descargar todo a Excel
-        st.download_button("📥 Descargar Base Completa", df_h.to_csv(index=False), "flota_completa.csv")
