@@ -33,7 +33,7 @@ def obtener_choferes_repo():
         except: pass
     return ["Error: choferes.xlsx no encontrado"]
 
-# --- 2. LOGIN ---
+# --- 2. LOGIN (CON ICONO 🚚) ---
 if "auth" not in st.session_state:
     st.title("🚚 Sistema de Control de Flota")
     _, col_log, _ = st.columns([1, 3, 1])
@@ -46,7 +46,7 @@ if "auth" not in st.session_state:
             if u == "ema_admin" and p == "jujuy2024":
                 st.session_state["auth"] = True
                 st.rerun()
-            else: st.error("❌")
+            else: st.error("❌ Credenciales incorrectas")
     st.stop()
 
 # --- 3. CARGA DE DATOS ---
@@ -58,17 +58,16 @@ if not df_h.empty and "Traza" in df_h.columns:
     trazas_db = sorted(df_h["Traza"].unique().tolist())
     trazas_existentes.extend(trazas_db)
 
-# --- 4. INTERFAZ ---
+# --- 4. INTERFAZ PRINCIPAL ---
 st.title("🚚 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Historial Completo"])
 
-# --- PESTAÑA REGISTRO ---
+# --- PESTAÑA 1: REGISTRO ---
 with tabs[0]:
-    st.subheader("📝 Formulario de Registro")
-    with st.form("registro_final", clear_on_submit=True):
+    st.subheader("📝 Nuevo Registro")
+    with st.form("registro_definitivo", clear_on_submit=True):
         
         c_p, _ = st.columns([1, 2])
-        # Input de precio para Cálculo Preciso
         precio_gasoil = c_p.number_input("💵 Precio Gasoil por Litro ($)", min_value=0.0, value=1100.0, step=0.1)
         
         st.divider()
@@ -76,7 +75,7 @@ with tabs[0]:
         f1, f2, f3 = st.columns(3)
         with f1:
             fecha = st.date_input("📅 Fecha", datetime.now(), format="DD/MM/YYYY")
-            movil = st.number_input("🔢 Móvil (1-100)", min_value=1, max_value=100)
+            movil = st.number_input("🔢 Móvil (1-100)", min_value=1, max_value=100, value=1)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
         
         with f2:
@@ -85,7 +84,7 @@ with tabs[0]:
             traza_sel = st.selectbox("📍 Seleccionar Traza", trazas_existentes)
             nueva_traza = ""
             if traza_sel == "➕ NUEVA TRAZA":
-                nueva_traza = st.text_input("✍️ Escribir Nueva Traza").upper()
+                nueva_traza = st.text_input("✍️ Escribir Nombre de Nueva Traza").upper()
             traza_final = nueva_traza if traza_sel == "➕ NUEVA TRAZA" else traza_sel
 
         with f3:
@@ -95,15 +94,14 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero", min_value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", min_value=0.0)
         
-        # --- LÓGICA DE VISUALIZACIÓN (EL CUADRO AZUL) ---
+        # CÁLCULOS VISUALES
         recorrido = kmf - kmi
         consumo = (lt / recorrido * 100) if recorrido > 0 else 0
         desvio = lt - (ltab + lral)
         costo_v = lt * precio_gasoil
-        costo_r = lral * precio_gasoil
         
-        # Restauramos la visualización del costo estimado en pesos
-        st.info(f"📊 **Resumen:** {recorrido} km | {consumo:.2f} L/100 | **Costo Estimado: $ {costo_v:,.2f}**")
+        # CUADRO AZUL INFORMATIVO (RECUPERADO)
+        st.info(f"📊 **Resumen del Viaje:** {recorrido} km | {consumo:.2f} L/100 | **Costo Estimado: $ {costo_v:,.2f}**")
         
         if st.form_submit_button("💾 GUARDAR REGISTRO"):
             if kmf > kmi and lt > 0 and (traza_final not in ["", "➕ NUEVA TRAZA"]):
@@ -114,27 +112,48 @@ with tabs[0]:
                     "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Desvio_Neto": round(desvio, 2), 
                     "Consumo_L100": round(consumo, 2),
-                    "Costo_Total_ARS": round(costo_v, 2), # Se guarda el costo calculado con el precio de hoy
-                    "Costo_Ralenti_ARS": round(costo_r, 2)
+                    "Costo_Total_ARS": round(costo_v, 2),
+                    "Costo_Ralenti_ARS": round(lral * precio_gasoil, 2)
                 }
                 df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success(f"✅ ¡Guardado! Costo del viaje: $ {costo_v:,.2f}")
+                st.success(f"✅ Guardado correctamente. Costo: $ {costo_v:,.2f}")
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("⚠️ Verificá los KM y que la Traza tenga nombre.")
+                st.error("⚠️ Error: Verificá KM, Litros o nombre de Traza.")
 
-# --- PESTAÑA IA ---
+# --- PESTAÑA 2: INTELIGENCIA (CON ICONOS 💰🛑📉) ---
 with tabs[1]:
     st.subheader("🦅 Inteligencia de Flota")
     if not df_h.empty:
         m1, m2, m3 = st.columns(3)
+        # ICONOS RECUPERADOS SEGÚN CAPTURA
         m1.metric("💰 Gasto Histórico", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
         m2.metric("🛑 Pérdida Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
         m3.metric("📉 Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
+        
+        st.divider()
+        c_i, c_d = st.columns(2)
+        with c_i:
+            st.subheader("🏆 Top 5 Eco-Driving")
+            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
+            for i, r in rank.iterrows():
+                st.write(f"{['🥇','🥈','🥉','👤','👤'][i]} **{r['Chofer']}**: {r['Consumo_L100']:.2f}")
+        with c_d:
+            st.subheader("🚨 Alertas de Desvío")
+            alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
+            for _, r in alertas.iterrows():
+                if abs(r['Desvio_Neto']) > 50: st.error(f"⚠️ **{r['Chofer']}**: {r['Desvio_Neto']:.1f} L")
+                else: st.write(f"✅ **{r['Chofer']}**: {r['Desvio_Neto']:.1f} L")
     else: st.info("Sin datos.")
 
+# --- PESTAÑA 3: HISTORIAL ---
+with tabs[2]:
+    st.subheader("📜 Historial Completo")
+    if not df_h.empty:
+        st.dataframe(df_h.iloc[::-1], use_container_width=True)
+        st.download_button("📥 Exportar CSV", df_h.to_csv(index=False), "historial_flota.csv")
 # --- PESTAÑA HISTORIAL ---
 with tabs[2]:
     st.subheader("📜 Historial Completo")
