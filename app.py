@@ -8,7 +8,7 @@ from sklearn.ensemble import IsolationForest
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Control de Flota IA", layout="wide")
-SPREADSHEET_URL = "TU_LINK_DE_GOOGLE_SHEETS_AQUI"
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def obtener_datos():
