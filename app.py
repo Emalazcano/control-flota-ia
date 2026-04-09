@@ -126,28 +126,30 @@ with tabs[0]:
                 time.sleep(1)
                 st.rerun()
 
-# --- TAB 2: OJO DE HALCÓN (DASHBOARD CON FILTRO MENSUAL) ---
+# --- TAB 2: OJO DE HALCÓN (DASHBOARD CON FILTRO MENSUAL CORREGIDO) ---
 with tabs[1]:
     if not df_h.empty:
-        # --- NUEVA SECCIÓN DE FILTROS ---
+        # Aseguramos que la columna Fecha sea de tipo datetime
+        df_h['Fecha'] = pd.to_datetime(df_h['Fecha'], errors='coerce')
+        
+        # Eliminamos filas que no tengan fecha válida para evitar errores en el filtro
+        df_h = df_h.dropna(subset=['Fecha'])
+
         st.markdown("### 🔍 Filtros de Análisis")
         col_f1, col_f2 = st.columns([1, 2])
         
         with col_f1:
-            # Creamos una lista de meses disponibles basados en la columna Fecha
+            # Ahora sí podemos usar .dt.strftime de forma segura
             df_h['Mes_Año'] = df_h['Fecha'].dt.strftime('%m-%Y')
             meses_disp = ["Todos"] + sorted(df_h['Mes_Año'].unique().tolist(), reverse=True)
             mes_sel = st.selectbox("📅 Seleccionar Mes/Año", meses_disp)
         
         # Filtrado del DataFrame
-        if mes_sel != "Todos":
-            df_view = df_h[df_h['Mes_Año'] == mes_sel].copy()
-        else:
-            df_view = df_h.copy()
+        df_view = df_h[df_h['Mes_Año'] == mes_sel].copy() if mes_sel != "Todos" else df_h.copy()
             
         st.divider()
 
-        # 3) MÉTRICAS DE CABECERA (Usamos df_view para que cambien con el filtro)
+        # 3) MÉTRICAS DE CABECERA
         st.markdown(f"### 🦅 Inteligencia de Flota - Periodo: {mes_sel}")
         m1, m2, m3 = st.columns(3)
         with m1:
@@ -159,7 +161,7 @@ with tabs[1]:
 
         st.divider()
 
-        # 1) CUADRO DE HONOR: ECO-DRIVING (image_bab940.png)
+        # 1) CUADRO DE HONOR
         st.markdown("### 🏆 Cuadro de Honor")
         top_5 = df_view.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
@@ -178,7 +180,7 @@ with tabs[1]:
         st.divider()
 
         # 2) RANKING DE DESVÍO DE COMBUSTIBLE
-        st.markdown("### ⚠️ Control de Desvíos del Mes")
+        st.markdown("### ⚠️ Ranking de Alerta: Control de Desvíos")
         df_desv = df_view.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         
         c_a1, c_a2 = st.columns(2)
@@ -194,7 +196,7 @@ with tabs[1]:
                             <div style="font-weight:bold; color:white; font-size:15px;">{row['Chofer']}</div>
                             <div style="font-size:11px; color:{'#FF4B4B' if exceso else '#00CC96'}; font-weight:bold;">{'🚨 EXCESO' if exceso else '✅ OK'}</div>
                         </div>
-                        <div style="font-size:22px; font-weight:bold; color:white;">{row['Desvio_Neto']:.1f} L</div>
+                        <div style="font-size:22px; font-weight:bold; color:white;">{row['Desvio_Neto']:.1f} Lts</div>
                     </div>
                 """, unsafe_allow_html=True)
 
@@ -203,15 +205,13 @@ with tabs[1]:
         # 4 y 5) RANKINGS FINALES
         c_low1, c_low2 = st.columns(2)
         with c_low1:
-            st.markdown("##### 🔢 Unidades más Eficientes")
-            rank_m = df_view.groupby("Movil")["Consumo_L100"].mean().sort_values(ascending=True).head(5).reset_index()
+            st.markdown("##### 🔢 Ranking por Unidad (Móviles)")
+            rank_m = df_view.groupby("Movil")["Consumo_L100"].mean().sort_values(ascending=True).head(10).reset_index()
             for i, row in rank_m.iterrows():
                 st.markdown(f'<div style="background:#1e2130; padding:8px 15px; border-radius:6px; margin-bottom:4px; border-left:4px solid #00CC96; display:flex; justify-content:space-between;"><span style="color:white;">Móvil {row["Movil"]}</span><span style="color:#00CC96; font-weight:bold;">{row["Consumo_L100"]:.1f} L/100</span></div>', unsafe_allow_html=True)
 
         with c_low2:
-            st.markdown("##### ⏳ Mayor Desperdicio Ralentí")
-            rank_r = df_view.groupby("Chofer")["L_Ralenti"].sum().sort_values(ascending=False).head(5).reset_index()
+            st.markdown("##### ⏳ Ranking Desperdicio Ralentí")
+            rank_r = df_view.groupby("Chofer")["L_Ralenti"].sum().sort_values(ascending=False).head(10).reset_index()
             for i, row in rank_r.iterrows():
                 st.markdown(f'<div style="background:#1e2130; padding:8px 15px; border-radius:6px; margin-bottom:4px; border-left:4px solid #EF553B; display:flex; justify-content:space-between;"><span style="color:white;">{row["Chofer"]}</span><span style="color:#EF553B; font-weight:bold;">{row["L_Ralenti"]:.1f} L</span></div>', unsafe_allow_html=True)
-    else:
-        st.warning("Sin datos para filtrar.")
