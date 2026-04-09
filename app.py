@@ -7,7 +7,7 @@ import plotly.express as px
 from sklearn.ensemble import IsolationForest
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Control de Flota IA", layout="wide")
+st.set_page_config(page_title="Control Financiero de Flota", layout="wide")
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -20,9 +20,12 @@ def obtener_datos():
 df_choferes = pd.read_excel("choferes.xlsx") if "choferes.xlsx" else pd.DataFrame()
 df_historico = obtener_datos()
 
-# --- INTERFAZ ---
-st.sidebar.title("Navegación")
-menu = st.sidebar.selectbox("Menú", ["Cargar Combustible", "Calculadora de Viaje (IA)", "Análisis IA & Dashboard"])
+# --- SIDEBAR: PRECIO DEL COMBUSTIBLE ---
+st.sidebar.title("💰 Configuración de Costos")
+precio_litro = st.sidebar.number_input("Precio Litro Gasoil ($)", min_value=0.0, value=1100.0, step=10.0)
+
+st.sidebar.markdown("---")
+menu = st.sidebar.selectbox("Menú", ["Cargar Combustible", "Calculadora de Flete (IA)", "Análisis IA & Dashboard"])
 
 if menu == "Cargar Combustible":
     st.header("⛽ Registro de Carga")
@@ -40,7 +43,7 @@ if menu == "Cargar Combustible":
         with col1:
             fecha = st.date_input("Fecha", datetime.now())
             chofer = st.selectbox("Chofer", df_choferes["Nombre"].unique() if not df_choferes.empty else ["Cargar excel"])
-            marca = st.radio("Marca del Camión", ["Scania", "Mercedes"])
+            marca = st.radio("Marca", ["Scania", "Mercedes"])
             ruta = st.radio("Tipo de Ruta", ["Llano", "Alta Montaña"])
             traza = st.text_input("Traza (Origen - Destino)")
         with col2:
@@ -54,26 +57,31 @@ if menu == "Cargar Combustible":
             km_recorr = km_fin - km_ini
             consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
             desvio = l_ticket - (l_tablero + l_ralenti)
+            costo_total = l_ticket * precio_litro
+            costo_ralenti = l_ralenti * precio_litro
             
             nuevo = pd.DataFrame([{
                 "Fecha": str(fecha), "Chofer": chofer, "Movil": movil_seleccionado,
                 "Marca": marca, "Ruta": ruta, "Traza": traza, "KM_Ini": km_ini,
                 "KM_Fin": km_fin, "KM_Recorr": km_recorr, "L_Tablero": l_tablero,
                 "L_Ralenti": l_ralenti, "L_Ticket": l_ticket, 
-                "Desvio_Neto": round(desvio, 2), "Consumo_L100": round(consumo, 2)
+                "Desvio_Neto": round(desvio, 2), "Consumo_L100": round(consumo, 2),
+                "Costo_Viaje_ARS": round(costo_total, 2),
+                "Costo_Ralenti_ARS": round(costo_ralenti, 2)
             }])
             
             try:
                 df_final = pd.concat([df_historico, nuevo], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                st.success("✅ ¡Sincronizado!"); time.sleep(1); st.rerun()
+                st.success(f"✅ ¡Guardado! Costo combustible viaje: ${costo_total:,.2f}")
+                time.sleep(1); st.rerun()
             except Exception as e:
                 if "200" in str(e): st.success("✅ Guardado"); time.sleep(1); st.rerun()
                 else: st.error(f"Error: {e}")
 
-elif menu == "Calculadora de Viaje (IA)":
-    st.header("🧮 Calculadora de Consumo Predictivo")
-    st.write("Usa esta herramienta para estimar cuánto combustible debería consumir un viaje.")
+elif menu == "Calculadora de Flete (IA)":
+    st.header("🚚 Presupuestador Inteligente de Flete")
+    st.write("Calcula el costo base de combustible para tu próximo viaje.")
 
     if not df_historico.empty:
         col1, col2 = st.columns(2)
@@ -81,54 +89,50 @@ elif menu == "Calculadora de Viaje (IA)":
             c_marca = st.selectbox("Marca del Camión", ["Scania", "Mercedes"])
             c_ruta = st.selectbox("Tipo de Ruta", ["Llano", "Alta Montaña"])
             c_distancia = st.number_input("Distancia a recorrer (KM)", min_value=1, value=100)
+            margen_seguridad = st.slider("Margen de seguridad (%)", 0, 20, 5)
         
-        # Lógica de Predicción Simple basada en promedios históricos
         filtro = df_historico[(df_historico['Marca'] == c_marca) & (df_historico['Ruta'] == c_ruta)]
         
         if not filtro.empty:
             consumo_medio = filtro['Consumo_L100'].mean()
             litros_estimados = (consumo_medio * c_distancia) / 100
+            litros_con_margen = litros_estimados * (1 + margen_seguridad/100)
+            costo_estimado = litros_con_margen * precio_litro
             
             with col2:
-                st.metric("Consumo Estimado", f"{round(litros_estimados, 1)} Litros")
-                st.metric("Rendimiento Objetivo", f"{round(consumo_medio, 2)} L/100km")
+                st.metric("Costo Estimado Gasoil", f"${costo_estimado:,.2f}")
+                st.metric("Litros Necesarios", f"{round(litros_con_margen, 1)} L")
+                st.write(f"⚠️ *Basado en precio actual de ${precio_litro}/litro*")
                 
-            st.info(f"💡 Esta predicción se basa en {len(filtro)} viajes anteriores similares.")
-            
-            # Comparativa visual
-            st.subheader("Rendimiento histórico para esta configuración")
-            fig_hist = px.histogram(filtro, x="Consumo_L100", nbins=10, title="Frecuencia de consumos históricos")
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.warning(f"👉 Para no perder margen, el flete debe cubrir los **${costo_estimado:,.2f}** solo de combustible.")
         else:
-            st.warning("Aún no hay suficientes datos para esta combinación de Marca y Ruta.")
-    else:
-        st.info("Carga datos para activar la calculadora.")
+            st.warning("Sin datos previos para esta ruta.")
 
 elif menu == "Análisis IA & Dashboard":
-    st.header("📊 Inteligencia de Flota")
+    st.header("📊 Dashboard Financiero e Inteligente")
     
     if not df_historico.empty:
-        # --- DETECCIÓN DE ANOMALÍAS ---
-        st.subheader("🚨 Alertas de la IA")
-        if len(df_historico) > 5:
-            data_ia = df_historico[['Consumo_L100', 'Desvio_Neto']].fillna(0)
-            modelo = IsolationForest(contamination=0.1, random_state=42)
-            df_historico['IA_Status'] = modelo.fit_predict(data_ia)
-            anomalias = df_historico[df_historico['IA_Status'] == -1]
-            if not anomalias.empty:
-                st.warning(f"Se detectaron {len(anomalias)} anomalías.")
-                st.dataframe(anomalias[['Fecha', 'Chofer', 'Movil', 'Consumo_L100', 'Desvio_Neto']])
+        # Aseguramos que existan las columnas financieras si es la primera vez
+        if 'Costo_Ralenti_ARS' not in df_historico.columns:
+            df_historico['Costo_Ralenti_ARS'] = df_historico['L_Ralenti'] * precio_litro
         
-        # --- KPI'S ---
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Consumo Promedio", f"{round(df_historico['Consumo_L100'].mean(), 2)} L/100")
-        col_b.metric("Desvío Neto Total", f"{round(df_historico['Desvio_Neto'].sum(), 2)} L")
-        col_c.metric("KM Totales", f"{int(df_historico['KM_Recorr'].sum())} km")
+        # --- BLOQUE FINANCIERO ---
+        st.subheader("💸 Impacto Económico")
+        col_f1, col_f2, col_f3 = st.columns(3)
+        total_perdido = df_historico['Costo_Ralenti_ARS'].sum()
+        col_f1.metric("Dinero Perdido (Ralentí)", f"${total_perdido:,.2f}", delta_color="inverse")
+        col_f2.metric("Gasto Total Gasoil", f"${(df_historico['L_Ticket'].sum() * precio_litro):,.2f}")
+        col_f3.metric("Costo Promedio p/ Viaje", f"${(df_historico['Costo_Viaje_ARS'].mean() if 'Costo_Viaje_ARS' in df_historico.columns else 0):,.2f}")
 
-        # --- GRÁFICOS ---
-        st.subheader("🏎️ Scania vs Mercedes")
-        st.plotly_chart(px.box(df_historico, x="Marca", y="Consumo_L100", color="Marca"), use_container_width=True)
+        # --- GRÁFICO DE DINERO PERDIDO ---
+        st.subheader("📉 Pérdida de Dinero por Ralentí (por Chofer)")
+        fig_money = px.bar(df_historico.groupby("Chofer")["Costo_Ralenti_ARS"].sum().reset_index(), 
+                           x="Chofer", y="Costo_Ralenti_ARS", 
+                           title="Pesos malgastados por motor encendido en espera",
+                           color_discrete_sequence=['#EF553B'])
+        st.plotly_chart(fig_money, use_container_width=True)
 
-        st.subheader("🏆 Ranking Choferes")
+        # --- RANKING CHOFERES ---
+        st.subheader("🏆 Ranking de Eficiencia")
         ranking = df_historico.groupby("Chofer")["Consumo_L100"].mean().sort_values().reset_index()
         st.plotly_chart(px.bar(ranking, x="Consumo_L100", y="Chofer", orientation='h', color="Consumo_L100"), use_container_width=True)
