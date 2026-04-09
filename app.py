@@ -11,7 +11,6 @@ from fpdf import FPDF
 st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
 
 # --- 2. CONEXIÓN ---
-# ⚠️ REEMPLAZA CON TU URL DE GOOGLE SHEETS
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -19,7 +18,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def obtener_datos():
     try:
-        return conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
+        data = conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
+        return data
     except:
         return pd.DataFrame()
 
@@ -48,7 +48,7 @@ def generar_comprobante_pdf(datos):
 def check_password():
     if "password_correct" not in st.session_state:
         st.title("🔐 Acceso Sistema de Flota")
-        st.text_input("Usuario", key="username", placeholder="Ej: ema_admin")
+        st.text_input("Usuario", key="username")
         st.text_input("Contraseña", type="password", key="password")
         if st.button("Ingresar"):
             usuarios_validos = {"ema_admin": "jujuy2024", "operador": "flota123"}
@@ -81,15 +81,12 @@ if check_password():
         for key in list(st.session_state.keys()): del st.session_state[key]
         st.rerun()
 
-    # --- LÓGICA DE MENÚ ---
     if menu == "Cargar Combustible":
         st.header("⛽ Registro de Carga")
         
-        # Sugerencia de KM inicial basada en el último registro
-        km_sugerido = 0
         movil_sel = st.selectbox("Móvil", list(range(1, 101)))
+        km_sugerido = 0
         if not df_historico.empty and "Movil" in df_historico.columns:
-            # Aseguramos que Movil sea comparado correctamente
             ultimo = df_historico[df_historico["Movil"].astype(str) == str(movil_sel)]
             if not ultimo.empty:
                 km_sugerido = ultimo["KM_Fin"].iloc[-1]
@@ -114,66 +111,53 @@ if check_password():
 
         if btn_guardar:
             if km_fin <= km_ini:
-                st.error("❌ El KM Final debe ser mayor al Inicial.")
-            elif l_ticket <= 0:
-                st.error("❌ Los litros deben ser mayores a 0.")
+                st.error("❌ El KM Final debe ser mayor.")
             else:
                 km_recorr = km_fin - km_ini
                 consumo = (l_ticket / km_recorr * 100) if km_recorr > 0 else 0
                 costo_total = l_ticket * precio_litro
                 costo_ralenti = l_ralenti * precio_litro
                 desvio = l_ticket - (l_tablero + l_ralenti)
-                
-                # FORMATEO DE FECHA ARGENTINA PARA EL PDF Y EXCEL
                 fecha_arg = fecha.strftime('%d/%m/%Y')
                 
                 datos_viaje = {
-                    "Fecha": fecha_arg, 
-                    "Chofer": chofer, 
-                    "Movil": movil_sel,
-                    "Marca": marca, 
-                    "Ruta": ruta, 
-                    "Traza": traza,
-                    "KM_Ini": km_ini,
-                    "KM_Fin": km_fin,
-                    "KM_Recorr": km_recorr, 
-                    "L_Ticket": l_ticket,
-                    "Consumo_L100": round(consumo, 2), 
+                    "Fecha": fecha_arg, "Chofer": chofer, "Movil": movil_sel,
+                    "Marca": marca, "Ruta": ruta, "Traza": traza,
+                    "KM_Ini": km_ini, "KM_Fin": km_fin, "KM_Recorr": km_recorr, 
+                    "L_Ticket": l_ticket, "Consumo_L100": round(consumo, 2), 
                     "Costo_Total_ARS": round(costo_total, 2),
                     "Costo_Ralenti_ARS": round(costo_ralenti, 2),
                     "Desvio_Neto": round(desvio, 2)
                 }
                 
                 try:
-                    # Sincronización con Google Sheets
-                    nuevo_df = pd.DataFrame([datos_viaje])
-                    df_final = pd.concat([df_historico, nuevo_df], ignore_index=True)
+                    df_final = pd.concat([df_historico, pd.DataFrame([datos_viaje])], ignore_index=True)
                     conn.update(spreadsheet=SPREADSHEET_URL, data=df_final)
-                    st.success(f"✅ Registro guardado. Costo: ${costo_total:,.2f}")
+                    st.success("✅ Registro guardado.")
                     
-                    # Generar PDF con los mismos datos
                     pdf_bytes = generar_comprobante_pdf(datos_viaje)
-                    st.download_button(
-                        label="📥 DESCARGAR COMPROBANTE PDF",
-                        data=bytes(pdf_bytes),
-                        file_name=f"Viaje_M{movil_sel}_{fecha_arg.replace('/','-')}.pdf",
-                        mime="application/pdf"
-                    )
+                    st.download_button(label="📥 DESCARGAR COMPROBANTE PDF", data=bytes(pdf_bytes), 
+                                     file_name=f"Viaje_M{movil_sel}.pdf", mime="application/pdf")
                 except Exception as e:
-                    if "200" in str(e): st.success("✅ Sincronizado correctamente")
-                    else: st.error(f"Error al guardar: {e}")
+                    st.error(f"Error: {e}")
 
     elif menu == "Análisis IA & Dashboard":
         st.header("📊 Inteligencia de Flota y Costos")
         if not df_historico.empty:
-            # Gráfico de Dinero Perdido (Ralentí)
-            st.subheader("📉 Dinero Perdido por Ralentí")
+            # --- PROTECCIÓN CONTRA COLUMNAS FALTANTES ---
+            if "Costo_Ralenti_ARS" not in df_historico.columns:
+                df_historico["Costo_Ralenti_ARS"] = 0
+            if "Chofer" not in df_historico.columns:
+                df_historico["Chofer"] = "Desconocido"
+            if "Marca" not in df_historico.columns:
+                df_historico["Marca"] = "S/D"
+
+            # Gráfico
             fig = px.bar(df_historico, x="Chofer", y="Costo_Ralenti_ARS", color="Marca", 
                          title="Pesos malgastados por motor encendido en espera")
             st.plotly_chart(fig, use_container_width=True)
             
-            # Tabla Histórica con fecha formateada
             st.subheader("📝 Historial de Registros")
             st.dataframe(df_historico.iloc[::-1])
         else:
-            st.info("No hay datos históricos para mostrar aún.")
+            st.info("No hay datos para mostrar.")
