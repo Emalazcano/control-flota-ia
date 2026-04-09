@@ -7,7 +7,7 @@ import plotly.express as px
 import os
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Control de Flota IA - Jujuy", layout="wide")
+st.set_page_config(page_title="Control Flota Jujuy", layout="wide")
 
 # Conexión a Google Sheets
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
@@ -16,7 +16,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def obtener_datos():
     try:
         df = conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
-        # Limpieza de datos para evitar errores de "None" o texto en columnas numéricas
+        # Limpieza masiva para evitar errores de celdas vacías (None)
         cols_num = ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto", "L_Tablero", "L_Ralenti"]
         for c in cols_num:
             if c in df.columns:
@@ -36,101 +36,103 @@ def obtener_choferes():
         except: pass
     return ["Cargar choferes en el Excel"]
 
-# --- 2. LOGIN COMPACTO ---
+# --- 2. LOGIN ULTRA-COMPACTO ---
 if "auth" not in st.session_state:
-    st.title("🚛 Sistema de Control de Flota")
-    # Login en una sola fila para que no sea extenso
-    col1, col2, col3 = st.columns([2, 2, 1])
-    u = col1.text_input("Usuario", placeholder="ema_admin")
-    p = col2.text_input("Contraseña", type="password", placeholder="••••")
-    if col3.button("Ingresar", use_container_width=True):
-        if u == "ema_admin" and p == "jujuy2024":
-            st.session_state["auth"] = True
-            st.rerun()
-        else:
-            st.error("Error")
+    # Usamos columnas con anchos específicos para que queden pegados
+    _, col_log, _ = st.columns([1, 3, 1])
+    with col_log:
+        st.subheader("🔐 Acceso")
+        c1, c2, c3 = st.columns([2, 2, 1])
+        u = c1.text_input("Usuario", label_visibility="collapsed", placeholder="Usuario")
+        p = c2.text_input("Clave", type="password", label_visibility="collapsed", placeholder="Contraseña")
+        if c3.button("Entrar", use_container_width=True):
+            if u == "ema_admin" and p == "jujuy2024":
+                st.session_state["auth"] = True
+                st.rerun()
+            else:
+                st.error("❌")
     st.stop()
 
-# --- 3. PROCESAMIENTO DE DATOS ---
+# --- 3. INICIO DE APLICACIÓN ---
 df_h = obtener_datos()
 lista_choferes = obtener_choferes()
 
-# --- 4. INTERFAZ PRINCIPAL ---
-st.title("🚛 Inteligencia de Flota y Costos")
+st.title("🚛 Control de Flota Inteligente")
 
-tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Historial Completo"])
+# Organización por pestañas
+tab_reg, tab_ia, tab_hist = st.tabs(["⛽ Registro", "🦅 Inteligencia", "📜 Historial"])
 
-# --- PESTAÑA: CARGA ---
-with tabs[0]:
-    with st.form("form_carga", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
+# --- PESTAÑA 1: REGISTRO ---
+with tab_reg:
+    with st.form("registro_viaje", clear_on_submit=True):
+        f1, f2, f3 = st.columns(3)
+        with f1:
             fecha = st.date_input("Fecha", datetime.now())
-            movil = st.selectbox("Móvil", list(range(1, 101)))
+            movil = st.number_input("Móvil", min_value=1, max_value=100)
             chofer = st.selectbox("Chofer", lista_choferes)
-        with c2:
+        with f2:
             marca = st.radio("Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             ruta = st.radio("Ruta", ["Llano", "Alta Montaña"], horizontal=True)
             traza = st.text_input("Traza (Ej: SSJJ-OLAR)").upper()
-        with c3:
+        with f3:
             kmi = st.number_input("KM Inicial", min_value=0)
             kmf = st.number_input("KM Final", min_value=0)
             lt = st.number_input("Litros Ticket", min_value=0.0)
             ltab = st.number_input("Litros Tablero", min_value=0.0)
             lral = st.number_input("Litros Ralentí", min_value=0.0)
         
-        if st.form_submit_button("💾 GUARDAR REGISTRO"):
+        if st.form_submit_button("💾 GUARDAR DATOS"):
             if kmf > kmi and lt > 0:
                 recorrido = kmf - kmi
                 cons = (lt / recorrido * 100)
                 desv = lt - (ltab + lral)
-                nuevo = {
+                nuevo_registro = {
                     "Fecha": fecha.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil,
                     "Marca": marca, "Ruta": ruta, "Traza": traza, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": recorrido, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Desvio_Neto": round(desv, 2), "Consumo_L100": round(cons, 2),
                     "Costo_Total_ARS": round(lt * 1100, 2), "Costo_Ralenti_ARS": round(lral * 1100, 2)
                 }
-                df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
+                df_f = pd.concat([df_h, pd.DataFrame([nuevo_registro])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success("✅ Guardado")
+                st.success("✅ Guardado correctamente")
                 time.sleep(1)
                 st.rerun()
 
-# --- PESTAÑA: IA & DASHBOARD ---
-with tabs[1]:
+# --- PESTAÑA 2: IA ---
+with tab_ia:
     if not df_h.empty:
-        # Métricas principales
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Gasto Total", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
-        k2.metric("Litros Totales", f"{df_h['L_Ticket'].sum():,.0f} L")
-        k3.metric("Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
+        # Indicadores rápidos
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Gasto Total", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
+        m2.metric("Consumo Promedio", f"{df_h['Consumo_L100'].mean():,.1f} L/100")
+        m3.metric("Desvío Total", f"{df_h['Desvio_Neto'].sum():,.1f} L", delta_color="inverse")
         
         st.divider()
-        g1, g2 = st.columns(2)
+        col_rank, col_alerta = st.columns(2)
         
-        with g1:
-            st.subheader("🏆 Top Choferes Eco-Driving")
-            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
-            for i, r in rank.iterrows():
-                m = "🥇" if i==0 else "🥈" if i==1 else "🥉" if i==2 else "👤"
-                st.markdown(f"**{m} {r['Chofer']}** - {r['Consumo_L100']:.2f} L/100km")
+        with col_rank:
+            st.subheader("🏆 Eco-Driving")
+            ranking = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(3).reset_index()
+            for i, r in ranking.iterrows():
+                emoji = ["🥇", "🥈", "🥉"][i]
+                st.write(f"{emoji} **{r['Chofer']}**: {r['Consumo_L100']:.2f} L/100km")
         
-        with g2:
-            st.subheader("⚠️ Monitor de Desvío Crítico")
-            desv_c = df_h.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-            for _, r in desv_c.iterrows():
-                col_b = "#FF4B4B" if r['Desvio_Neto'] > 20 else "#28a745"
-                st.markdown(f"<div style='border-left: 5px solid {col_b}; padding-left: 10px;'><b>{r['Chofer']}</b>: {r['Desvio_Neto']:.1f} L</div>", unsafe_allow_html=True)
+        with col_alerta:
+            st.subheader("🚨 Alertas de Desvío")
+            alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).head(3).reset_index()
+            for _, r in alertas.iterrows():
+                color = "red" if r['Desvio_Neto'] > 15 else "orange"
+                st.markdown(f":{color}[**{r['Chofer']}**: {r['Desvio_Neto']:.1f} Litros]")
     else:
-        st.info("Carga datos para ver el análisis.")
+        st.info("Sin datos para analizar.")
 
-# --- PESTAÑA: HISTORIAL ---
-with tabs[2]:
-    st.subheader("📜 Historial Completo")
+# --- PESTAÑA 3: HISTORIAL ---
+with tab_hist:
     if not df_h.empty:
-        # Esto soluciona que el historial no aparezca
+        st.subheader("📋 Registros Históricos")
+        # Mostramos la tabla completa. Si no aparece, es por el filtro de la pestaña.
         st.dataframe(df_h.iloc[::-1], use_container_width=True)
-        st.download_button("📥 Descargar Excel", df_h.to_csv(index=False), "flota.csv")
+        st.download_button("📥 Exportar CSV", df_h.to_csv(index=False), "historial.csv")
     else:
-        st.warning("No hay datos en el historial.")
+        st.warning("El historial está vacío.")
