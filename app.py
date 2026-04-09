@@ -12,14 +12,13 @@ st.set_page_config(page_title="Control Flota Jujuy", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 
-# Persistencia del precio para que no se borre al registrar
 if "precio_gasoil_fijo" not in st.session_state:
     st.session_state["precio_gasoil_fijo"] = 1100.0
 
 def obtener_datos():
     try:
         df = conn.read(spreadsheet=SPREADSHEET_URL, ttl=0)
-        cols_num = ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto", "L_Tablero", "L_Ralenti"]
+        cols_num = ["Costo_Total_ARS", "L_Ticket", "Costo_Ralenti_ARS", "Consumo_L100", "Desvio_Neto", "L_Tablero", "L_Ralenti", "KM_Fin"]
         for c in cols_num:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
@@ -51,7 +50,7 @@ if "auth" not in st.session_state:
             if u == "ema_admin" and p == "jujuy2024":
                 st.session_state["auth"] = True
                 st.rerun()
-            else: st.error("❌ Datos incorrectos")
+            else: st.error("❌")
     st.stop()
 
 # --- 3. PROCESAMIENTO DE DATOS ---
@@ -68,16 +67,13 @@ trazas_para_selector = ["➕ NUEVA TRAZA"] + sorted(list(set(trazas_en_db)))
 st.title("🚚 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Historial Completo"])
 
-# --- TAB 1: REGISTRO ---
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # Gasoil fuera del form para persistencia
     c_p, _ = st.columns([1, 2])
     precio_gasoil = c_p.number_input("💵 Precio Gasoil por Litro ($)", 
                                      min_value=0.0, 
-                                     value=st.session_state["precio_gasoil_fijo"], 
-                                     step=0.1)
+                                     value=st.session_state["precio_gasoil_fijo"])
     st.session_state["precio_gasoil_fijo"] = precio_gasoil
 
     with st.form("registro_final", clear_on_submit=True):
@@ -85,8 +81,16 @@ with tabs[0]:
         f1, f2, f3 = st.columns(3)
         with f1:
             fecha = st.date_input("📅 Fecha", datetime.now())
-            movil = st.number_input("🔢 Móvil (1-100)", min_value=1, max_value=100)
+            movil_sel = st.number_input("🔢 Móvil (1-100)", min_value=1, max_value=100)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
+            
+            # --- LÓGICA DE KM AUTOMÁTICO ---
+            km_inicial_sugerido = 0
+            if not df_h.empty:
+                # Buscamos el último registro de ese móvil específico
+                ultimo_registro_movil = df_h[df_h["Movil"] == movil_sel]
+                if not ultimo_registro_movil.empty:
+                    km_inicial_sugerido = int(ultimo_registro_movil["KM_Fin"].iloc[-1])
         
         with f2:
             marca = st.radio("🚛 Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
@@ -96,7 +100,8 @@ with tabs[0]:
             traza_final = nueva_traza_input if traza_sel == "➕ NUEVA TRAZA" else traza_sel
 
         with f3:
-            kmi = st.number_input("🛣️ KM Inicial", min_value=0)
+            # El campo KM Inicial ahora trae el valor sugerido por defecto
+            kmi = st.number_input("🛣️ KM Inicial", min_value=0, value=km_inicial_sugerido)
             kmf = st.number_input("🏁 KM Final", min_value=0)
             lt = st.number_input("⛽ Litros Ticket", min_value=0.0)
             ltab = st.number_input("📟 Litros Tablero", min_value=0.0)
@@ -106,19 +111,17 @@ with tabs[0]:
         consumo = (lt / recorrido * 100) if recorrido > 0 else 0
         costo_v = lt * precio_gasoil
         
-        # Cuadro azul de resumen (Calculadora en tiempo real)
         st.info(f"📊 **Resumen:** {recorrido} km | {consumo:.2f} L/100 | **Costo Estimado: $ {costo_v:,.2f}**")
         
         if st.form_submit_button("💾 GUARDAR REGISTRO"):
-            # Validación de trazas duplicadas
             if traza_sel == "➕ NUEVA TRAZA" and traza_final in trazas_en_db:
-                st.error(f"🚫 La ruta '{traza_final}' ya existe. Selecciónala de la lista.")
+                st.error(f"🚫 La ruta '{traza_final}' ya existe.")
             elif kmf <= kmi or lt <= 0 or traza_final == "":
-                st.error("⚠️ Verificá los KM, Litros o el nombre de la Traza.")
+                st.error("⚠️ Verificá KM, Litros o nombre de Traza.")
             else:
                 nuevo = {
                     "Fecha": fecha.strftime('%Y-%m-%d'),
-                    "Chofer": chofer, "Movil": movil, "Marca": marca, "Ruta": ruta_tipo, 
+                    "Chofer": chofer, "Movil": movil_sel, "Marca": marca, "Ruta": ruta_tipo, 
                     "Traza": traza_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": recorrido, 
                     "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Desvio_Neto": round(lt - (ltab + lral), 2),
@@ -128,15 +131,14 @@ with tabs[0]:
                 }
                 df_f = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
                 conn.update(spreadsheet=SPREADSHEET_URL, data=df_f)
-                st.success(f"✅ ¡Guardado! Costo: $ {costo_v:,.2f}")
+                st.success(f"✅ Guardado")
                 time.sleep(1)
                 st.rerun()
 
-# --- TAB 2: INTELIGENCIA (RECUPERADO COMPLETO) ---
+# --- TAB 2: INTELIGENCIA (VERIFICADO) ---
 with tabs[1]:
     st.subheader("🦅 Inteligencia de Flota")
     if not df_h.empty:
-        # Métricas con iconos originales
         m1, m2, m3 = st.columns(3)
         m1.metric("💰 Gasto Histórico", f"$ {df_h['Costo_Total_ARS'].sum():,.0f}")
         m2.metric("🛑 Pérdida Ralentí", f"$ {df_h['Costo_Ralenti_ARS'].sum():,.0f}")
@@ -147,7 +149,7 @@ with tabs[1]:
         with g1:
             st.subheader("📉 Dispersión de Desvíos")
             fig_scat = px.scatter(df_h, x="Fecha", y="Desvio_Neto", color="Marca", 
-                                  size=df_h["Desvio_Neto"].abs(), template="plotly_dark",
+                                  size=df_h["Desvio_Neto"].abs().clip(lower=1), template="plotly_dark",
                                   color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
             st.plotly_chart(fig_scat, use_container_width=True)
         with g2:
@@ -157,23 +159,8 @@ with tabs[1]:
                              color="Desvio_Neto", color_continuous_scale="Reds", template="plotly_dark")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-        st.divider()
-        c_i, c_d = st.columns(2)
-        with c_i:
-            st.subheader("🏆 Top 5 Eco-Driving")
-            rank = df_h.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
-            for i, r in rank.iterrows():
-                st.write(f"{['🥇','🥈','🥉','👤','👤'][i]} **{r['Chofer']}**: {r['Consumo_L100']:.2f}")
-        with c_d:
-            st.subheader("🚨 Alertas de Desvío")
-            for _, r in df_d.iterrows():
-                if r['Desvio_Neto'] > 50: st.error(f"🚨 **{r['Chofer']}**: {r['Desvio_Neto']:.1f} Litros")
-                elif r['Desvio_Neto'] > 0: st.warning(f"⚠️ **{r['Chofer']}**: {r['Desvio_Neto']:.1f} Litros")
-    else: st.info("Cargá datos para ver las estadísticas.")
-
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
     st.subheader("📜 Historial Completo")
     if not df_h.empty:
         st.dataframe(df_h.iloc[::-1], use_container_width=True)
-        st.download_button("📥 Exportar CSV", df_h.to_csv(index=False), "flota_jujuy.csv")
