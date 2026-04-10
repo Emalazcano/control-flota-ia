@@ -73,7 +73,7 @@ with tabs[0]:
     cp, _ = st.columns([1, 3])
     st.session_state["precio_gasoil"] = cp.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
     st.markdown("##### 🚛 Vehículo")
-movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
 
     # --- LÓGICA KM AUTOMÁTICO ---
     km_sugerido = 0.0
