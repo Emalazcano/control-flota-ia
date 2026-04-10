@@ -72,31 +72,22 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
-  # --- LÓGICA KM AUTOMÁTICO (VERSIÓN FINAL) ---
+    # --- LÓGICA KM AUTOMÁTICO (VERSIÓN FINAL) ---
     km_sugerido = 0.0
-    
     if not df_h.empty:
         # Aseguramos que el móvil sea tratado como número para la búsqueda
-        try:
-            m_buscado = float(movil_sel)
-            # Filtramos los registros que coincidan con el móvil
-            ult_reg = df_h[df_h["Movil"] == m_buscado]
-            
-            if not ult_reg.empty:
-                # Ordenamos por fecha y traemos el último KM_Fin
-                # (Ya no hace falta pd.to_datetime porque lo hicimos arriba en la carga)
+        ult_reg = df_h[df_h["Movil"] == float(movil_sel)]              
+        if not ult_reg.empty:
+           km_sugerido = float(ult_reg.sort_values("Fecha").iloc[-1]["KM_Fin"])
                 ult_reg = ult_reg.sort_values("Fecha")
-                km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
-        except Exception as e:
-            # Si algo falla, el KM sugerido se mantiene en 0.0
-            km_sugerido = 0.0
+                km_sugerido = 0.0
 
     # Esto es para que vos veas si está encontrando algo (DEBUG)
     if km_sugerido > 0:
         st.success(f"✅ KM Inicial recuperado: {km_sugerido}")
-    else:
-        st.warning(f"⚠️ No se encontraron viajes previos para el Móvil {movil_sel}")
-        # ... acá sigue el resto de tu código (marca, chofer, etc)
+   with st.form("registro_form"):
+        col1, col2, col3 = st.columns(3)
+       
         with col1:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
