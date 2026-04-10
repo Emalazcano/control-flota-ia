@@ -94,6 +94,8 @@ with tabs[0]:
                 km_sugerido = float(valor_final)
             except:
                 km_sugerido = 0.0
+        with st.form("registro_form"):
+            col1, col2, col3 = st.columns(3)
         # ... acá sigue el resto de tu código (marca, chofer, etc)
         with col1:
             st.markdown("##### 🚛 Vehículo")             
