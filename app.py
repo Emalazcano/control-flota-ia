@@ -51,7 +51,7 @@ def obtener_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        num_cols = ["KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -72,30 +72,30 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
-   # --- LÓGICA KM AUTOMÁTICO (VERSIÓN BLINDADA) ---
+  # --- LÓGICA KM AUTOMÁTICO (VERSIÓN FINAL) ---
     km_sugerido = 0.0
+    
     if not df_h.empty:
-        # 1. Convertimos toda la columna y el seleccionado a texto y quitamos espacios
-        movil_buscado = str(movil_sel).strip()
-        columna_movil = df_h["Movil"].astype(str).str.strip()
-        
-        # 2. Filtramos
-        ult_reg = df_h[columna_movil == movil_buscado]
-        
-        if not ult_reg.empty:
-            # 3. Nos aseguramos de que la fecha sea leída como fecha para ordenar bien
-            ult_reg = ult_reg.copy()
-            ult_reg["Fecha"] = pd.to_datetime(ult_reg["Fecha"], dayfirst=True, errors='coerce')
-            ult_reg = ult_reg.sort_values("Fecha")
+        # Aseguramos que el móvil sea tratado como número para la búsqueda
+        try:
+            m_buscado = float(movil_sel)
+            # Filtramos los registros que coincidan con el móvil
+            ult_reg = df_h[df_h["Movil"] == m_buscado]
             
-            # 4. Tomamos el último valor y lo limpiamos
-            valor_final = ult_reg.iloc[-1]["KM_Fin"]
-            try:
-                km_sugerido = float(valor_final)
-            except:
-                km_sugerido = 0.0
-        with st.form("registro_form"):
-            col1, col2, col3 = st.columns(3)
+            if not ult_reg.empty:
+                # Ordenamos por fecha y traemos el último KM_Fin
+                # (Ya no hace falta pd.to_datetime porque lo hicimos arriba en la carga)
+                ult_reg = ult_reg.sort_values("Fecha")
+                km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
+        except Exception as e:
+            # Si algo falla, el KM sugerido se mantiene en 0.0
+            km_sugerido = 0.0
+
+    # Esto es para que vos veas si está encontrando algo (DEBUG)
+    if km_sugerido > 0:
+        st.success(f"✅ KM Inicial recuperado: {km_sugerido}")
+    else:
+        st.warning(f"⚠️ No se encontraron viajes previos para el Móvil {movil_sel}")
         # ... acá sigue el resto de tu código (marca, chofer, etc)
         with col1:
             st.markdown("##### 🚛 Vehículo")             
