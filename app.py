@@ -119,10 +119,10 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero")
             lral = st.number_input("⏳ Litros Ralentí")
 
-        distancia = kmf - kmi
-        consumo = (lt / distancia * 100) if distancia > 0 else 0
-        costo_t = lt * st.session_state["precio_gasoil"]
-        desvio_n = lt - (ltab + lral)
+            distancia = kmf - kmi
+            consumo = (lt / distancia * 100) if distancia > 0 else 0
+            costo_t = lt * st.session_state["precio_gasoil"]
+            desvio_n = lt - (ltab + lral)
         
         if distancia > 0:
             st.divider()
