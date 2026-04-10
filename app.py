@@ -101,6 +101,7 @@ with tabs[0]:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
+            st.session_state["precio_gasoil"] = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
             
         with col2:
             st.markdown("##### 📍 Ruta")
