@@ -109,7 +109,7 @@ with tabs[0]:
             traza = st.selectbox("🗺️ Traza", traza_existente)
             nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza == "➕ NUEVA" and nt != "") else traza
-            
+            st.info(f"DEBUG: El sistema encontró {km_sugerido} para el móvil {movil_sel}")
         with col3:
             st.markdown("##### ⛽ Consumo")
             kmi = st.number_input("🛣️ KM Inicial", value=float(km_sugerido))
