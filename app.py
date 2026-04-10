@@ -70,6 +70,8 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Histo
 # --- TAB 1: REGISTRO ---
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
+    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+    
    # --- LÓGICA KM AUTOMÁTICO (VERSIÓN BLINDADA) ---
     km_sugerido = 0.0
     if not df_h.empty:
