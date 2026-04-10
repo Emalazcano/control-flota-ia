@@ -82,9 +82,9 @@ with tabs[0]:
             # --- LÓGICA KM AUTOMÁTICO ---
             km_sugerido = 0.0
             if not df_h.empty:
-                ult_reg = df_h[df_h["Movil"] == movil_sel]
+                ult_reg = df_h[df_h["Movil"].astype(str) == str(movil_sel)]
                 if not ult_reg.empty:
-                    km_sugerido = ult_reg.iloc[-1]["KM_Fin"]
+                    km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
