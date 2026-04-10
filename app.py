@@ -29,7 +29,8 @@ if "auth" not in st.session_state:
             if u == "ema_admin" and p == "jujuy2024":
                 st.session_state["auth"] = True
                 st.rerun()
-            else: st.error("Clave incorrecta")
+            else: 
+                st.error("Clave incorrecta")
     st.stop()
 
 # --- 3. DATOS Y CONEXIONES ---
@@ -45,7 +46,8 @@ def obtener_choferes():
         try:
             xl = pd.read_excel("choferes.xlsx")
             return sorted(xl.iloc[:, 0].dropna().unique().tolist())
-        except: pass
+        except: 
+            pass
     return ["ADELMO JORGE", "BENITEZ DIEGO", "GONZALEZ FABIAN"]
 
 def cargar_historial():
@@ -58,7 +60,8 @@ def cargar_historial():
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
         return df
-    except: return pd.DataFrame()
+    except: 
+        return pd.DataFrame()
 
 df_h = cargar_historial()
 lista_choferes = obtener_choferes()
@@ -72,29 +75,25 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
-    # --- LÓGICA KM AUTOMÁTICO (VERSIÓN FINAL) ---
+    # --- LÓGICA KM AUTOMÁTICO ---
     km_sugerido = 0.0
     if not df_h.empty:
-        # 1. Intentamos buscar el último kilometraje
         try:
             m_buscado = float(movil_sel)
             ult_reg = df_h[df_h["Movil"] == m_buscado]
             
             if not ult_reg.empty:
-                # Ordenamos por fecha y sacamos el último KM_Fin
                 ult_reg = ult_reg.sort_values("Fecha")
                 km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
         except:
-            # Si hay error en el formato del Excel, volvemos a 0
             km_sugerido = 0.0
 
-    # 2. Cartel de aviso (Alineado con el 'if' de la fila 77)
     if km_sugerido > 0:
         st.success(f"✅ KM Inicial recuperado: {km_sugerido}")
     else:
         st.info(f"ℹ️ No hay registros previos para el móvil {movil_sel}")
 
-    # 3. Iniciamos el formulario (Alineado con el 'if' de la fila 77)
+    # --- FORMULARIO ---
     with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
         
@@ -110,7 +109,7 @@ with tabs[0]:
             traza = st.selectbox("🗺️ Traza", traza_existente)
             nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza == "➕ NUEVA" and nt != "") else traza
-            st.info(f"DEBUG: El sistema encontró {km_sugerido} para el móvil {movil_sel}")
+            
         with col3:
             st.markdown("##### ⛽ Consumo")
             kmi = st.number_input("🛣️ KM Inicial", value=float(km_sugerido))
@@ -119,23 +118,23 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero")
             lral = st.number_input("⏳ Litros Ralentí")
 
+            # --- CALCULADORA (DENTRO DE COL3) ---
             distancia = kmf - kmi
             consumo = (lt / distancia * 100) if distancia > 0 else 0
-            costo_t = lt * st.session_state["precio_gasoil"]
+            costo_t = lt * st.session_state.get("precio_gasoil", 2065.0)
             desvio_n = lt - (ltab + lral)
-        
-        if distancia > 0:
-            st.divider()
-            c1, c2, c3 = st.columns(3)
-            c1.info(f"📏 Recorrido: **{distancia} KM**")
-            c2.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-            c3.info(f"💰 Costo Viaje: **${costo_t:,.0f}**")
+
+            if distancia > 0:
+                st.divider()
+                st.info(f"📏 Recorrido: **{distancia} KM**")
+                st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
+                st.info(f"💰 Costo: **${costo_t:,.0f}**")
 
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos.")
+                st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
             else:
                 nuevo_reg = {
                     "Fecha": datetime.now().strftime('%Y-%m-%d'), "Movil": movil_sel,
@@ -164,7 +163,6 @@ with tabs[1]:
         df_view = df_h[df_h['Mes_Año'] == mes_sel].copy() if mes_sel != "Todos" else df_h.copy()
         st.divider()
 
-        # MÉTRICAS
         st.markdown(f"### 🦅 Periodo: {mes_sel}")
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_view["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
@@ -177,8 +175,9 @@ with tabs[1]:
         cols = st.columns(5)
         iconos = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
-            with cols[i]:
-                st.markdown(f'<div class="metric-card"><div style="font-size:40px;">{iconos[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+            if i < len(cols):
+                with cols[i]:
+                    st.markdown(f'<div class="metric-card"><div style="font-size:40px;">{iconos[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
         st.divider()
         st.markdown("### ⚠️ Control de Desvíos (>50L)")
@@ -194,4 +193,5 @@ with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
         st.dataframe(df_h.sort_values("Fecha", ascending=False), use_container_width=True)
-    else: st.info("No hay datos.")
+    else: 
+        st.info("No hay datos en el historial.")
