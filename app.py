@@ -75,19 +75,30 @@ with tabs[0]:
     # --- LÓGICA KM AUTOMÁTICO (VERSIÓN FINAL) ---
     km_sugerido = 0.0
     if not df_h.empty:
-        # Aseguramos que el móvil sea tratado como número para la búsqueda
-        ult_reg = df_h[df_h["Movil"] == float(movil_sel)]              
-        if not ult_reg.empty:
-           km_sugerido = float(ult_reg.sort_values("Fecha").iloc[-1]["KM_Fin"])
+        # 1. Intentamos buscar el último kilometraje
+        try:
+            m_buscado = float(movil_sel)
+            ult_reg = df_h[df_h["Movil"] == m_buscado]
+            
+            if not ult_reg.empty:
+                # Ordenamos por fecha y sacamos el último KM_Fin
                 ult_reg = ult_reg.sort_values("Fecha")
-                km_sugerido = 0.0
+                km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
+        except:
+            # Si hay error en el formato del Excel, volvemos a 0
+            km_sugerido = 0.0
 
-    # Esto es para que vos veas si está encontrando algo (DEBUG)
+    # 2. Cartel de aviso (Alineado con el 'if' de la fila 77)
     if km_sugerido > 0:
         st.success(f"✅ KM Inicial recuperado: {km_sugerido}")
-   with st.form("registro_form"):
+    else:
+        st.info(f"ℹ️ No hay registros previos para el móvil {movil_sel}")
+
+    # 3. Iniciamos el formulario (Alineado con el 'if' de la fila 77)
+    with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
-       
+        
+        with col1:
         with col1:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
