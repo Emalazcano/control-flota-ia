@@ -70,30 +70,28 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Histo
 # --- TAB 1: REGISTRO ---
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
-    
-    # 1. Creamos columnas FUERA del form para el móvil y el precio
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.markdown("##### 🚛 Vehículo")
-        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-    with c2:
-        # Aquí podés poner el precio del gasoil si lo tenías ahí
-        st.write("") # Espacio estético
-
-    # 2. LÓGICA KM AUTOMÁTICO (Mejorada)
+   # --- LÓGICA KM AUTOMÁTICO (VERSIÓN BLINDADA) ---
     km_sugerido = 0.0
     if not df_h.empty:
-        # Limpiamos espacios y aseguramos que ambos sean tratados como texto para comparar
-        filtro = df_h["Movil"].astype(str).str.strip() == str(movil_sel).strip()
-        ult_reg = df_h[filtro]
+        # 1. Convertimos toda la columna y el seleccionado a texto y quitamos espacios
+        movil_buscado = str(movil_sel).strip()
+        columna_movil = df_h["Movil"].astype(str).str.strip()
+        
+        # 2. Filtramos
+        ult_reg = df_h[columna_movil == movil_buscado]
         
         if not ult_reg.empty:
-            # Ordenamos por fecha y traemos el último KM_Fin cargado
-            km_sugerido = float(ult_reg.sort_values("Fecha").iloc[-1]["KM_Fin"])
-
-    # 3. Iniciamos el formulario
-    with st.form("registro_form"):
-        col1, col2, col3 = st.columns(3)
+            # 3. Nos aseguramos de que la fecha sea leída como fecha para ordenar bien
+            ult_reg = ult_reg.copy()
+            ult_reg["Fecha"] = pd.to_datetime(ult_reg["Fecha"], dayfirst=True, errors='coerce')
+            ult_reg = ult_reg.sort_values("Fecha")
+            
+            # 4. Tomamos el último valor y lo limpiamos
+            valor_final = ult_reg.iloc[-1]["KM_Fin"]
+            try:
+                km_sugerido = float(valor_final)
+            except:
+                km_sugerido = 0.0
         # ... acá sigue el resto de tu código (marca, chofer, etc)
         with col1:
             st.markdown("##### 🚛 Vehículo")             
