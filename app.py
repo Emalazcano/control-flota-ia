@@ -70,21 +70,31 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Histo
 # --- TAB 1: REGISTRO ---
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
-    cp, _ = st.columns([1, 3])
-    st.session_state["precio_gasoil"] = cp.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
-    st.markdown("##### 🚛 Vehículo")
-    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+    
+    # 1. Creamos columnas FUERA del form para el móvil y el precio
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        st.markdown("##### 🚛 Vehículo")
+        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+    with c2:
+        # Aquí podés poner el precio del gasoil si lo tenías ahí
+        st.write("") # Espacio estético
 
-    # --- LÓGICA KM AUTOMÁTICO ---
+    # 2. LÓGICA KM AUTOMÁTICO (Mejorada)
     km_sugerido = 0.0
     if not df_h.empty:
-        ult_reg = df_h[df_h["Movil"].astype(str).str.strip() == str(movil_sel).strip()]
+        # Limpiamos espacios y aseguramos que ambos sean tratados como texto para comparar
+        filtro = df_h["Movil"].astype(str).str.strip() == str(movil_sel).strip()
+        ult_reg = df_h[filtro]
+        
         if not ult_reg.empty:
-            ult_reg = ult_reg.sort_values("Fecha")
-            km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
+            # Ordenamos por fecha y traemos el último KM_Fin cargado
+            km_sugerido = float(ult_reg.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
+    # 3. Iniciamos el formulario
     with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
+        # ... acá sigue el resto de tu código (marca, chofer, etc)
         with col1:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
