@@ -72,20 +72,19 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     cp, _ = st.columns([1, 3])
     st.session_state["precio_gasoil"] = cp.number_input("💵 Precio Gasoil por Litro ($)", value=st.session_state["precio_gasoil"])
-    
+    st.markdown("##### 🚛 Vehículo")
+movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+  # --- LÓGICA KM AUTOMÁTICO ---
+            km_sugerido = 0.0
+            if not df_h.empty:
+                ult_reg = df_h[df_h["Movil"].astype(str).str.strip() == str(movil_sel).strip()]
+                if not ult_reg.empty:
+                    ult_reg = ult_reg.sort_values("Fecha")
+                    km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
     with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown("##### 🚛 Vehículo")
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-            
-            # --- LÓGICA KM AUTOMÁTICO ---
-            km_sugerido = 0.0
-            if not df_h.empty:
-                ult_reg = df_h[df_h["Movil"].astype(str) == str(movil_sel)]
-                if not ult_reg.empty:
-                    km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
-            
+            st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
             
