@@ -122,7 +122,7 @@ with tabs[0]:
             # --- CALCULADORA (DENTRO DE COL3) ---
             distancia = kmf - kmi
             consumo = (lt / distancia * 100) if distancia > 0 else 0
-            costo_t = lt * st.session_state.get("precio_gasoil", 2065.0)
+            costo_t = lt * st.session_state["precio_gasoil"]
             desvio_n = lt - (ltab + lral)
 
             if distancia > 0:
