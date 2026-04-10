@@ -98,7 +98,7 @@ with tabs[0]:
     with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
         
-             with col1:
+        with col1:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
