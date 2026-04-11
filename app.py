@@ -58,7 +58,7 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         return df
     except: 
         return pd.DataFrame()
@@ -138,7 +138,7 @@ with tabs[0]:
                 st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
             else:
                 nuevo_reg = {
-                    "Fecha": datetime.now().strftime('%Y-%m-%d'), "Movil": movil_sel,
+                    "Fecha": datetime.now().strftime('%d/%m/%Y'), "Movil": movil_sel,
                     "Chofer": chofer, "Marca": marca, "Ruta": ruta_tipo, "Traza": t_final,
                     "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": distancia, "L_Ticket": lt,
                     "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round(consumo, 2),
@@ -193,6 +193,7 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
-        st.dataframe(df_h.sort_values("Fecha", ascending=False), use_container_width=True)
-    else: 
-        st.info("No hay datos en el historial.")
+        # Creamos una copia para mostrar con la fecha formateada
+        df_display = df_h.copy()
+        df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
+        st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
