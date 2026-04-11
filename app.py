@@ -134,13 +134,20 @@ with tabs[0]:
                 st.divider()
                 st.info(f"📏 Recorrido: **{distancia} KM**")
                 st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-                st.info(f"💰 Costo: **${costo_t:,.0f}**")
-
+                st.info(f"💰 Costo Viaje: **${costo_t:,.0f}**")
+# --- VALIDACIÓN VISUAL PREVENTIVA ---
+            if 10 <= consumo < 15 or 80 < consumo <= 120:
+                st.warning(f"⚠️ Consumo inusual ({consumo:.1f} L/100). Verificá los litros y KM antes de seguir.")
+            elif consumo < 10 or consumo > 120:
+                st.error(f"🚨 ERROR: El consumo ({consumo:.1f} L/100) está fuera de los límites lógicos.")
+        
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
+            elif consumo < 10 or consumo > 120:
+                st.error(f"❌ No se puede guardar: El consumo calculado ({consumo:.1f}) es imposible para un camión.")
             else:
                 # --- GUARDADO CON FECHA CORREGIDA ---
                 nuevo_reg = {
@@ -160,11 +167,12 @@ with tabs[0]:
                     "Costo_Total_ARS": round(costo_t, 2),
                     "Desvio_Neto": round(desvio_n, 2)
                 }
-                df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                conn.update(spreadsheet=URL, data=df_up)
-                st.success("✅ ¡Registro guardado!")
-                time.sleep(1)
-                st.rerun()
+               with st.spinner("Guardando en Google Sheets..."):
+                    df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                    conn.update(spreadsheet=URL, data=df_up)
+                    st.success("✅ ¡Registro guardado con éxito!")
+                    time.sleep(1)
+                    st.rerun()
 
 # --- TABS 2 Y 3 SE MANTIENEN IGUAL ---
 with tabs[1]:
