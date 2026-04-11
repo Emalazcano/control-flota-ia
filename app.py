@@ -57,11 +57,8 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        # --- CORRECCIÓN DE FECHA Y IDENTACIÓN ---
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-        
         return df
     except: 
         return pd.DataFrame()
@@ -78,13 +75,11 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
-    # --- LÓGICA KM AUTOMÁTICO ---
     km_sugerido = 0.0
     if not df_h.empty:
         try:
             m_buscado = float(movil_sel)
             ult_reg = df_h[df_h["Movil"] == m_buscado]
-            
             if not ult_reg.empty:
                 ult_reg = ult_reg.sort_values("Fecha")
                 km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
@@ -96,7 +91,6 @@ with tabs[0]:
     else:
         st.info(f"ℹ️ No hay registros previos para el móvil {movil_sel}")
 
-    # --- FORMULARIO ---
     with st.form("registro_form"):
         col1, col2, col3 = st.columns(3)
         
@@ -104,8 +98,6 @@ with tabs[0]:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
-            
-            # --- NUEVOS CAMPOS: PRECIO Y FECHA ---
             st.session_state["precio_gasoil"] = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
             fecha_sel = st.date_input("📅 Fecha de Carga", datetime.now())
             
@@ -134,25 +126,21 @@ with tabs[0]:
                 st.divider()
                 st.info(f"📏 Recorrido: **{distancia} KM**")
                 st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-                st.info(f"💰 Costo Viaje: **${costo_t:,.0f}**")
-# --- VALIDACIÓN VISUAL PREVENTIVA ---
-            if 10 <= consumo < 15 or 80 < consumo <= 120:
-                st.warning(f"⚠️ Consumo inusual ({consumo:.1f} L/100). Verificá los litros y KM antes de seguir.")
-            elif consumo < 10 or consumo > 120:
-                st.error(f"🚨 ERROR: El consumo ({consumo:.1f} L/100) está fuera de los límites lógicos.")
-        
+                st.info(f"💰 Costo: **${costo_t:,.0f}**")
+                
+                if 10 <= consumo < 15 or 80 < consumo <= 120:
+                    st.warning(f"⚠️ Consumo inusual ({consumo:.1f} L/100). Verificá datos.")
+                elif consumo < 10 or consumo > 120:
+                    st.error(f"🚨 ERROR: El consumo ({consumo:.1f} L/100) es ilógico.")
+
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit:
-            # 1. Validaciones
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
             elif consumo < 10 or consumo > 120:
-                st.error(f"❌ No se puede guardar: El consumo calculado ({consumo:.1f}) es imposible.")
-            
-            # 2. Si todo está bien, guardamos (BLOQUE ELSE)
+                st.error(f"❌ No se puede guardar: Consumo imposible ({consumo:.1f}).")
             else:
-                # Todo este bloque debe tener la misma sangría (un nivel más que el else)
                 nuevo_reg = {
                     "Fecha": fecha_sel.strftime('%d/%m/%Y'),
                     "Chofer": chofer,
@@ -170,22 +158,14 @@ with tabs[0]:
                     "Costo_Total_ARS": round(costo_t, 2),
                     "Desvio_Neto": round(desvio_n, 2)
                 }
-                
-                # FIJATE ACÁ: 'with' alineado con 'nuevo_reg'
                 with st.spinner("Guardando en Google Sheets..."):
                     df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_up)
-                    st.success("✅ ¡Registro guardado con éxito!")
-                    time.sleep(1)
-                    st.rerun()
-               with st.spinner("Guardando en Google Sheets..."):
-                    df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                    conn.update(spreadsheet=URL, data=df_up)
-                    st.success("✅ ¡Registro guardado con éxito!")
+                    st.success("✅ ¡Registro guardado!")
                     time.sleep(1)
                     st.rerun()
 
-# --- TABS 2 Y 3 SE MANTIENEN IGUAL ---
+# --- TABS 2 Y 3 ---
 with tabs[1]:
     if not df_h.empty:
         df_h = df_h.dropna(subset=['Fecha'])
@@ -198,7 +178,6 @@ with tabs[1]:
         
         df_view = df_h[df_h['Mes_Año'] == mes_sel].copy() if mes_sel != "Todos" else df_h.copy()
         st.divider()
-
         st.markdown(f"### 🦅 Periodo: {mes_sel}")
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_view["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
@@ -214,15 +193,6 @@ with tabs[1]:
             if i < len(cols):
                 with cols[i]:
                     st.markdown(f'<div class="metric-card"><div style="font-size:40px;">{iconos[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
-
-        st.divider()
-        st.markdown("### ⚠️ Control de Desvíos (>50L)")
-        df_desv = df_view.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        ca1, ca2 = st.columns(2)
-        for i, row in df_desv.iterrows():
-            exc = row['Desvio_Neto'] > 50
-            target = ca1 if i % 2 == 0 else ca2
-            target.markdown(f'<div style="background:{"#421212" if exc else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if exc else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><b style="color:white;">{row["Chofer"]}</b><br><small style="color:{"#FF4B4B" if exc else "#00CC96"};">{"🚨 EXCESO" if exc else "✅ OK"}</small></div><b style="font-size:20px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
 with tabs[2]:
     st.subheader("📜 Registros Guardados")
