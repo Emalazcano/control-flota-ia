@@ -128,6 +128,7 @@ with tabs[0]:
                 st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
                 st.info(f"💰 Costo: **${costo_t:,.0f}**")
                 
+                # --- VALIDACIONES DE CONSUMO ---
                 if 10 <= consumo < 15 or 80 < consumo <= 120:
                     st.warning(f"⚠️ Consumo inusual ({consumo:.1f} L/100). Verificá datos.")
                 elif consumo < 10 or consumo > 120:
@@ -148,45 +149,68 @@ with tabs[0]:
                     "Marca": marca,
                     "Ruta": ruta_tipo,
                     "Traza": t_final,
-                    "KM_Ini": kmi,
-                    "KM_Fin": kmf,
-                    "KM_Recorr": distancia,
-                    "L_Ticket": lt,
-                    "L_Tablero": ltab,
-                    "L_Ralenti": lral,
+                    "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": distancia,
+                    "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Consumo_L100": round(consumo, 2),
                     "Costo_Total_ARS": round(costo_t, 2),
                     "Desvio_Neto": round(desvio_n, 2)
                 }
-                with st.spinner("Guardando en Google Sheets..."):
-                    df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                    conn.update(spreadsheet=URL, data=df_up)
+                # --- GUARDADO OPTIMIZADO ---
+                with st.spinner("Guardando en la nube..."):
+                    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                    conn.update(spreadsheet=URL, data=df_final)
                     st.success("✅ ¡Registro guardado!")
                     time.sleep(1)
                     st.rerun()
 
-# --- TABS 2 Y 3 ---
+# --- TAB 2: OJO DE HALCÓN (IA & ESTADÍSTICAS) ---
 with tabs[1]:
     if not df_h.empty:
-        df_h = df_h.dropna(subset=['Fecha'])
-        st.markdown("### 🔍 Filtros de Análisis")
-        col_f1, _ = st.columns([1, 2])
-        with col_f1:
-            df_h['Mes_Año'] = df_h['Fecha'].dt.strftime('%m-%Y')
-            meses_disp = ["Todos"] + sorted(df_h['Mes_Año'].unique().tolist(), reverse=True)
-            mes_sel = st.selectbox("📅 Seleccionar Mes/Año", meses_disp)
+        # Limpieza para análisis
+        df_ana = df_h.dropna(subset=['Fecha']).copy()
+        df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
         
-        df_view = df_h[df_h['Mes_Año'] == mes_sel].copy() if mes_sel != "Todos" else df_h.copy()
-        st.divider()
-        st.markdown(f"### 🦅 Periodo: {mes_sel}")
-        m1, m2, m3 = st.columns(3)
-        m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_view["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
-        m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_view["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
-        m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_view["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
+        st.markdown("### 🔍 Inteligencia de Datos")
+        c_f1, c_f2 = st.columns(2)
+        with c_f1:
+            mes_sel = st.selectbox("📅 Mes de Análisis", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
+        with c_f2:
+            ruta_sel = st.multiselect("🏔️ Filtrar por Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
 
+        # Filtros
+        df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
+        if mes_sel != "Todos":
+            df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+
+        # --- MÉTRICAS ---
         st.divider()
-        st.markdown("### 🏆 Cuadro de Honor")
-        top_5 = df_view.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
+        m1, m2, m3 = st.columns(3)
+        m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_filtrado["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
+        m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
+        m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
+
+        # --- GRÁFICOS ---
+        st.divider()
+        col_g1, col_g2 = st.columns(2)
+
+        with col_g1:
+            df_t = df_ana.groupby('Mes_Año')['Consumo_L100'].mean().reset_index()
+            fig_t = px.line(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Tendencia de Consumo Mensual",
+                            markers=True, line_shape="spline", color_discrete_sequence=["#4CAF50"])
+            fig_t.update_layout(template="plotly_dark")
+            st.plotly_chart(fig_t, use_container_width=True)
+
+        with col_g2:
+            df_m = df_filtrado.groupby("Marca")["Consumo_L100"].mean().reset_index()
+            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia: Scania vs Mercedes",
+                           color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
+            fig_m.update_layout(template="plotly_dark", showlegend=False)
+            st.plotly_chart(fig_m, use_container_width=True)
+
+        # --- RANKING ---
+        st.divider()
+        st.markdown("### 🏆 Ranking de Eficiencia (Choferes)")
+        top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         iconos = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
@@ -194,11 +218,12 @@ with tabs[1]:
                 with cols[i]:
                     st.markdown(f'<div class="metric-card"><div style="font-size:40px;">{iconos[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
+# --- TAB 3: HISTORIAL ---
 with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
         df_display = df_h.copy()
-        df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
+        df_display['Fecha'] = pd.to_datetime(df_display['Fecha']).dt.strftime('%d/%m/%Y')
         st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
     else: 
-        st.info("No hay datos en el historial.")
+        st.info("No hay datos.")
