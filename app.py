@@ -144,12 +144,15 @@ with tabs[0]:
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit:
+            # 1. Validaciones
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
             elif consumo < 10 or consumo > 120:
-                st.error(f"❌ No se puede guardar: El consumo calculado ({consumo:.1f}) es imposible para un camión.")
+                st.error(f"❌ No se puede guardar: El consumo calculado ({consumo:.1f}) es imposible.")
+            
+            # 2. Si todo está bien, guardamos (BLOQUE ELSE)
             else:
-                # --- GUARDADO CON FECHA CORREGIDA ---
+                # Todo este bloque debe tener la misma sangría (un nivel más que el else)
                 nuevo_reg = {
                     "Fecha": fecha_sel.strftime('%d/%m/%Y'),
                     "Chofer": chofer,
@@ -167,6 +170,14 @@ with tabs[0]:
                     "Costo_Total_ARS": round(costo_t, 2),
                     "Desvio_Neto": round(desvio_n, 2)
                 }
+                
+                # FIJATE ACÁ: 'with' alineado con 'nuevo_reg'
+                with st.spinner("Guardando en Google Sheets..."):
+                    df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                    conn.update(spreadsheet=URL, data=df_up)
+                    st.success("✅ ¡Registro guardado con éxito!")
+                    time.sleep(1)
+                    st.rerun()
                with st.spinner("Guardando en Google Sheets..."):
                     df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_up)
