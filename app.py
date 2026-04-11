@@ -57,8 +57,11 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            if 'Fecha' in df.columns:
+        
+        # --- CORRECCIÓN DE FECHA Y IDENTACIÓN ---
+        if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+        
         return df
     except: 
         return pd.DataFrame()
@@ -101,7 +104,10 @@ with tabs[0]:
             st.markdown("##### 🚛 Vehículo")             
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", lista_choferes)
+            
+            # --- NUEVOS CAMPOS: PRECIO Y FECHA ---
             st.session_state["precio_gasoil"] = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
+            fecha_sel = st.date_input("📅 Fecha de Carga", datetime.now())
             
         with col2:
             st.markdown("##### 📍 Ruta")
@@ -119,7 +125,6 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero")
             lral = st.number_input("⏳ Litros Ralentí")
 
-            # --- CALCULADORA (DENTRO DE COL3) ---
             distancia = kmf - kmi
             consumo = (lt / distancia * 100) if distancia > 0 else 0
             costo_t = lt * st.session_state["precio_gasoil"]
@@ -137,12 +142,23 @@ with tabs[0]:
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
             else:
+                # --- GUARDADO CON FECHA CORREGIDA ---
                 nuevo_reg = {
-                    "Fecha": datetime.now().strftime('%d/%m/%Y'), "Movil": movil_sel,
-                    "Chofer": chofer, "Marca": marca, "Ruta": ruta_tipo, "Traza": t_final,
-                    "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": distancia, "L_Ticket": lt,
-                    "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round(consumo, 2),
-                    "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(desvio_n, 2)
+                    "Fecha": fecha_sel.strftime('%d/%m/%Y'),
+                    "Chofer": chofer,
+                    "Movil": movil_sel,
+                    "Marca": marca,
+                    "Ruta": ruta_tipo,
+                    "Traza": t_final,
+                    "KM_Ini": kmi,
+                    "KM_Fin": kmf,
+                    "KM_Recorr": distancia,
+                    "L_Ticket": lt,
+                    "L_Tablero": ltab,
+                    "L_Ralenti": lral,
+                    "Consumo_L100": round(consumo, 2),
+                    "Costo_Total_ARS": round(costo_t, 2),
+                    "Desvio_Neto": round(desvio_n, 2)
                 }
                 df_up = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 conn.update(spreadsheet=URL, data=df_up)
@@ -150,7 +166,7 @@ with tabs[0]:
                 time.sleep(1)
                 st.rerun()
 
-# --- TAB 2: OJO DE HALCÓN ---
+# --- TABS 2 Y 3 SE MANTIENEN IGUAL ---
 with tabs[1]:
     if not df_h.empty:
         df_h = df_h.dropna(subset=['Fecha'])
@@ -189,11 +205,11 @@ with tabs[1]:
             target = ca1 if i % 2 == 0 else ca2
             target.markdown(f'<div style="background:{"#421212" if exc else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if exc else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><b style="color:white;">{row["Chofer"]}</b><br><small style="color:{"#FF4B4B" if exc else "#00CC96"};">{"🚨 EXCESO" if exc else "✅ OK"}</small></div><b style="font-size:20px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
-# --- TAB 3: HISTORIAL ---
 with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
-        # Creamos una copia para mostrar con la fecha formateada
         df_display = df_h.copy()
         df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
+    else: 
+        st.info("No hay datos en el historial.")
