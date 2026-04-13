@@ -70,8 +70,9 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())
+            df['Fecha'] = pd.to_datetime(df['Fecha'], format='%d/%m/%Y', errors='coerce')
+            df['Fecha'] = df['Fecha'].fillna(pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce'))
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp(2025, 1, 1))
         return df
     except: return pd.DataFrame()
 
