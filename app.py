@@ -220,7 +220,8 @@ with tabs[1]:
 with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
-        
+        df_v = df_v.sort_values("Fecha", ascending=False)
+        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
         # 1. Primero ordenamos por fecha real (cronológicamente)
         df_v = df_v.sort_values("Fecha", ascending=False)
         
@@ -229,7 +230,8 @@ with tabs[2]:
         
         # 3. Aplicamos el formato de puntos a los Kilómetros
         # Esto quita los decimales y pone el punto de miles
-        for col in ['KM_Ini', 'KM_Fin', 'KM_Recorr']:
+       columnas_km = ['KM_Ini', 'KM_Fin', 'KM_Recorr']
+        for col in columnas_km:
             if col in df_v.columns:
                 df_v[col] = df_v[col].apply(lambda x: "{:,.0f}".format(x).replace(",", "."))
 
