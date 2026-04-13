@@ -39,7 +39,6 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
-# Clave para resetear el formulario
 if "form_reset_key" not in st.session_state:
     st.session_state["form_reset_key"] = 0
 
@@ -55,19 +54,14 @@ def obtener_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        
-        # Aseguramos columnas numéricas
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # --- LIMPIEZA DE FECHA "A PRUEBA DE BALAS" ---
         if 'Fecha' in df.columns:
-            # Detecta formatos mixtos (YYYY-MM-DD y DD/MM/YYYY) y quita la hora
             df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce', dayfirst=True)
             df['Fecha'] = df['Fecha'].dt.normalize()
-            
         return df
     except Exception as e:
         st.error(f"Error de conexión: {e}")
@@ -123,32 +117,37 @@ with tabs[0]:
 
             distancia = kmf - kmi
             consumo = (lt / distancia * 100) if distancia > 0 else 0
-            costo_t = lt * st.session_state["precio_gasoil"]
+            # Cálculo para la vista previa
+            costo_previa = lt * st.session_state["precio_gasoil"]
             desvio_n = lt - (ltab + lral)
 
             if distancia > 0:
                 st.divider()
                 st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-                if consumo < 10 or consumo > 120:
-                    st.error(f"🚨 Consumo ilógico.")
+                st.info(f"💰 Costo estimado: **${costo_previa:,.0f}**")
 
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos.")
             else:
+                # RE-CALCULO PARA GUARDADO FINAL
+                costo_final = lt * st.session_state["precio_gasoil"]
+                
                 nuevo_reg = {
                     "Fecha": fecha_sel.strftime('%d/%m/%Y'),
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": distancia, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Consumo_L100": round(consumo, 2), "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(desvio_n, 2)
+                    "Consumo_L100": round(consumo, 2), 
+                    "Costo_Total_ARS": round(costo_final, 2), # Se corrigió aquí
+                    "Desvio_Neto": round(desvio_n, 2)
                 }
                 with st.spinner("Guardando..."):
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_final)
-                    st.success("✅ ¡Registro guardado!")
-                    st.session_state["form_reset_key"] += 1 # Reset form
+                    st.success("✅ ¡Registro y costo guardados con éxito!")
+                    st.session_state["form_reset_key"] += 1
                     time.sleep(1)
                     st.rerun()
 
@@ -169,52 +168,40 @@ with tabs[1]:
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        # Métricas principales
         st.divider()
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_filtrado["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
-        # Ranking de Choferes
         st.divider()
-        st.markdown("### 🏆 Ranking de Eficiencia y ⚠️ Desvíos")
+        st.markdown("### 🏆 Eficiencia por Chofer")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         for i, row in top_5.iterrows():
             if i < len(cols):
                 with cols[i]:
-                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div></div>', unsafe_allow_html=True)
 
-        # Gráficos Visuales al FINAL
         st.divider()
-        st.markdown("### 📊 Inteligencia de Datos Avanzada")
         col_g1, col_g2 = st.columns(2)
         with col_g1:
-            # Gráfico de Área Suave
             df_t = df_ana.groupby('Mes_Año')['Consumo_L100'].mean().reset_index()
             fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Evolución Mensual", color_discrete_sequence=["#00FFC8"])
-            fig_t.update_traces(mode="lines+markers", line_shape="spline", line_width=3)
             fig_t.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_t, use_container_width=True)
         with col_g2:
-            # Gráfico de Barras con Etiquetas
             df_m = df_filtrado.groupby("Marca")["Consumo_L100"].mean().reset_index()
-            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia: Scania vs Mercedes", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
+            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Scania vs Mercedes (L/100)", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
             fig_m.update_traces(textposition="outside", texttemplate='%{y:.1f}')
             fig_m.update_layout(template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_m, use_container_width=True)
 
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
-    st.subheader("📜 Historial de Registros")
+    st.subheader("📜 Historial Completo")
     if not df_h.empty:
         df_hist = df_h.copy()
-        # Aseguramos el orden cronológico
         df_hist = df_hist.sort_values("Fecha", ascending=False)
-        # Formateamos solo para la vista
         df_hist['Fecha'] = df_hist['Fecha'].dt.strftime('%d/%m/%Y')
-        df_hist['Fecha'] = df_hist['Fecha'].fillna("Formato Inválido")
         st.dataframe(df_hist, use_container_width=True)
-    else: 
-        st.info("No hay datos en el historial.")
