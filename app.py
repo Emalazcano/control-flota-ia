@@ -147,7 +147,7 @@ with tabs[0]:
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_final)
                     st.session_state["precio_gasoil"] = precio_comb
-                    st.success(f"✅ Guardado")
+                    st.success(f"✅ Guardado - Costo del viaje: ${costo_viaje:,.2f}")
                     time.sleep(1)
                     st.rerun()
 
