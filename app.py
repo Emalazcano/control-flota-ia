@@ -39,6 +39,10 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
+# Lógica para resetear formulario
+if "form_reset_key" not in st.session_state:
+    st.session_state["form_reset_key"] = 0
+
 @st.cache_data(ttl=600)
 def obtener_choferes():
     if os.path.exists("choferes.xlsx"):
@@ -87,7 +91,8 @@ with tabs[0]:
     else:
         st.info(f"ℹ️ No hay registros previos para el móvil {movil_sel}")
 
-    with st.form("registro_form"):
+    # Clave dinámica para resetear el formulario al guardar
+    with st.form(key=f"registro_form_{st.session_state['form_reset_key']}"):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown("##### 🚛 Vehículo")             
@@ -126,9 +131,10 @@ with tabs[0]:
                     st.error(f"🚨 ERROR: Consumo ({consumo:.1f} L/100) ilógico.")
 
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+        
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos.")
+                st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
             elif consumo < 10 or consumo > 120:
                 st.error(f"❌ No se puede guardar: Consumo imposible ({consumo:.1f}).")
             else:
@@ -139,10 +145,12 @@ with tabs[0]:
                     "KM_Recorr": distancia, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Consumo_L100": round(consumo, 2), "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(desvio_n, 2)
                 }
-                with st.spinner("Guardando..."):
+                with st.spinner("Guardando en la nube..."):
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_final)
                     st.success("✅ ¡Registro guardado!")
+                    # Cambiamos la clave para limpiar el form
+                    st.session_state["form_reset_key"] += 1
                     time.sleep(1)
                     st.rerun()
 
