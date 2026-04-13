@@ -39,7 +39,6 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
-# Lógica para resetear formulario
 if "form_reset_key" not in st.session_state:
     st.session_state["form_reset_key"] = 0
 
@@ -54,12 +53,18 @@ def obtener_choferes():
 
 def cargar_historial():
     try:
+        # Leemos los datos tal cual vienen de Sheets
         df = conn.read(spreadsheet=URL, ttl=0)
+        
+        # Columnas numéricas seguras
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # TRATAMIENTO DE FECHA MEJORADO:
         if 'Fecha' in df.columns:
+            # Convertimos a datetime forzando el formato día/mes/año
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         return df
     except: return pd.DataFrame()
@@ -88,10 +93,7 @@ with tabs[0]:
 
     if km_sugerido > 0:
         st.success(f"✅ KM Inicial recuperado: {km_sugerido}")
-    else:
-        st.info(f"ℹ️ No hay registros previos para el móvil {movil_sel}")
 
-    # Clave dinámica para resetear el formulario al guardar
     with st.form(key=f"registro_form_{st.session_state['form_reset_key']}"):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -122,34 +124,28 @@ with tabs[0]:
 
             if distancia > 0:
                 st.divider()
-                st.info(f"📏 Recorrido: **{distancia} KM**")
                 st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-                st.info(f"💰 Costo: **${costo_t:,.0f}**")
-                if 10 <= consumo < 15 or 80 < consumo <= 120:
-                    st.warning(f"⚠️ Consumo inusual ({consumo:.1f} L/100).")
-                elif consumo < 10 or consumo > 120:
-                    st.error(f"🚨 ERROR: Consumo ({consumo:.1f} L/100) ilógico.")
+                if consumo < 10 or consumo > 120:
+                    st.error(f"🚨 ERROR: Consumo ({consumo:.1f}) ilógico.")
 
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-        
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos. Revisá KM Final, Litros o Traza.")
+                st.error("⚠️ Datos inválidos.")
             elif consumo < 10 or consumo > 120:
-                st.error(f"❌ No se puede guardar: Consumo imposible ({consumo:.1f}).")
+                st.error("❌ Consumo imposible.")
             else:
                 nuevo_reg = {
-                    "Fecha": fecha_sel.strftime('%d/%m/%Y'),
+                    "Fecha": fecha_sel.strftime('%d/%m/%Y'), # Enviamos como texto limpio
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": distancia, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Consumo_L100": round(consumo, 2), "Costo_Total_ARS": round(costo_t, 2), "Desvio_Neto": round(desvio_n, 2)
                 }
-                with st.spinner("Guardando en la nube..."):
+                with st.spinner("Guardando..."):
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_final)
-                    st.success("✅ ¡Registro guardado!")
-                    # Cambiamos la clave para limpiar el form
+                    st.success("✅ ¡Guardado!")
                     st.session_state["form_reset_key"] += 1
                     time.sleep(1)
                     st.rerun()
@@ -171,45 +167,41 @@ with tabs[1]:
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        # 1. MÉTRICAS CLAVE
+        # Métricas
         st.divider()
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_filtrado["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
-        # 2. CUADRO DE HONOR Y DESVÍOS
+        # Ranking y Desvíos
         st.divider()
-        st.markdown("### 🏆 Ranking de Eficiencia y ⚠️ Desvíos")
+        st.markdown("### 🏆 Ranking y ⚠️ Desvíos")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
-        iconos = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
             if i < len(cols):
                 with cols[i]:
-                    st.markdown(f'<div class="metric-card"><div style="font-size:40px;">{iconos[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div></div>', unsafe_allow_html=True)
 
-        st.markdown("##### Historial de Desvíos Mensuales")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         ca1, ca2 = st.columns(2)
         for i, row in df_desv.iterrows():
             exc = row['Desvio_Neto'] > 50
             target = ca1 if i % 2 == 0 else ca2
-            target.markdown(f'<div style="background:{"#421212" if exc else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if exc else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><b style="color:white;">{row["Chofer"]}</b><br><small style="color:{"#FF4B4B" if exc else "#00CC96"};">{"🚨 EXCESO" if exc else "✅ OK"}</small></div><b style="font-size:20px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+            target.markdown(f'<div style="background:{"#421212" if exc else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if exc else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><b style="color:white;">{row["Chofer"]}</b><b style="font-size:18px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
-        # 3. GRÁFICOS AL FINAL (IMPACTO VISUAL)
+        # Gráficos
         st.divider()
-        st.markdown("### 📊 Inteligencia de Datos Avanzada")
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             df_t = df_ana.groupby('Mes_Año')['Consumo_L100'].mean().reset_index()
-            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Evolución de Consumo", color_discrete_sequence=["#00FFC8"])
-            fig_t.update_traces(mode="lines+markers", line_shape="spline", line_width=3)
+            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Tendencia Mensual", color_discrete_sequence=["#00FFC8"])
             fig_t.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_t, use_container_width=True)
         with col_g2:
             df_m = df_filtrado.groupby("Marca")["Consumo_L100"].mean().reset_index()
-            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Scania vs Mercedes (L/100)", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
+            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia de Marcas", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
             fig_m.update_traces(textposition="outside", texttemplate='%{y:.1f}')
             fig_m.update_layout(template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_m, use_container_width=True)
@@ -218,6 +210,21 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
-        df_display = df_h.copy()
-        df_display['Fecha'] = pd.to_datetime(df_display['Fecha']).dt.strftime('%d/%m/%Y')
-        st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
+        # Copiamos para no afectar el análisis original
+        df_hist = df_h.copy()
+        
+        # Nos aseguramos que la fecha se lea bien antes de mostrarla
+        df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha'], errors='coerce')
+        
+        # Ordenamos por fecha (más reciente arriba)
+        df_hist = df_hist.sort_values("Fecha", ascending=False)
+        
+        # Formateamos para el usuario
+        df_hist['Fecha'] = df_hist['Fecha'].dt.strftime('%d/%m/%Y')
+        
+        # Rellenamos cualquier "NaT" o "None" que haya quedado por error
+        df_hist['Fecha'] = df_hist['Fecha'].fillna("S/D")
+        
+        st.dataframe(df_hist, use_container_width=True)
+    else: 
+        st.info("No hay datos en el historial.")
