@@ -119,14 +119,14 @@ with tabs[0]:
             nt = st.text_input("✍️ Nombre Nueva Traza", key="nt_k").upper()
             t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
         with col3:
-            kmi = st.number_input("🛣️ KM Inicial", value=float(km_sugerido))
-            kmf = st.number_input("🏁 KM Final", key="kmf_k")
+            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1)
+            kmf = st.number_input("🏁 KM Final", value=0, step=1, key="kmf_k")
             lt = st.number_input("⛽ Litros Ticket", key="lt_k")
             ltab = st.number_input("📟 Litros Tablero", key="ltab_k")
             lral = st.number_input("⏳ Litros Ralentí", key="lral_k")
 
         if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True):
-            dist = kmf - kmi
+            dist = int(kmf - kmi)
             cons = (lt / dist * 100) if dist > 0 else 0
             costo_viaje = round(lt * precio_comb, 2)
             desv = lt - (ltab + lral)
