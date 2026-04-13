@@ -117,7 +117,6 @@ with tabs[0]:
 
             distancia = kmf - kmi
             consumo = (lt / distancia * 100) if distancia > 0 else 0
-            # Cálculo para la vista previa
             costo_previa = lt * st.session_state["precio_gasoil"]
             desvio_n = lt - (ltab + lral)
 
@@ -131,16 +130,14 @@ with tabs[0]:
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos.")
             else:
-                # RE-CALCULO PARA GUARDADO FINAL
                 costo_final = lt * st.session_state["precio_gasoil"]
-                
                 nuevo_reg = {
                     "Fecha": fecha_sel.strftime('%d/%m/%Y'),
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": distancia, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
                     "Consumo_L100": round(consumo, 2), 
-                    "Costo_Total_ARS": round(costo_final, 2), # Se corrigió aquí
+                    "Costo_Total_ARS": round(costo_final, 2),
                     "Desvio_Neto": round(desvio_n, 2)
                 }
                 with st.spinner("Guardando..."):
@@ -182,6 +179,25 @@ with tabs[1]:
             if i < len(cols):
                 with cols[i]:
                     st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div></div>', unsafe_allow_html=True)
+
+        # --- SECCIÓN RESTAURADA: RANKING DE DESVÍOS ---
+        st.divider()
+        st.markdown("### ⚠️ Ranking de Desvíos de Combustible")
+        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
+        ca1, ca2 = st.columns(2)
+        for i, row in df_desv.iterrows():
+            # Si el desvío es mayor a 50L, lo marcamos en rojo
+            es_critico = row['Desvio_Neto'] > 50
+            target = ca1 if i % 2 == 0 else ca2
+            bg_color = "#421212" if es_critico else "#1e2130"
+            border_color = "#FF4B4B" if es_critico else "#3d425a"
+            
+            target.markdown(f"""
+                <div style="background:{bg_color}; padding:12px; border-radius:8px; border:1px solid {border_color}; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <b style="color:white;">{row["Chofer"]}</b>
+                    <b style="font-size:18px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
+                </div>
+            """, unsafe_allow_html=True)
 
         st.divider()
         col_g1, col_g2 = st.columns(2)
