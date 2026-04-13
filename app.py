@@ -56,6 +56,15 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
+@st.cache_data(ttl=600)
+def obtener_choferes():
+    if os.path.exists("choferes.xlsx"):
+        try:
+            xl = pd.read_excel("choferes.xlsx")
+            return sorted(xl.iloc[:, 0].dropna().unique().tolist())
+        except: pass
+    return ["ADELMO JORGE", "BENITEZ DIEGO", "GONZALEZ FABIAN"]    
+
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
