@@ -66,7 +66,7 @@ def obtener_choferes():
     return ["ADELMO JORGE", "BENITEZ DIEGO", "GONZALEZ FABIAN"]    
 
 def cargar_historial():
-       try:
+    try:
         df = conn.read(spreadsheet=URL, ttl=0)
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
@@ -75,7 +75,7 @@ def cargar_historial():
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         return df
-        except: return pd.DataFrame()
+    except: return pd.DataFrame()
         
         # Limpieza de fechas al LEER (dayfirst obligatorio)
         if 'Fecha' in df.columns:
