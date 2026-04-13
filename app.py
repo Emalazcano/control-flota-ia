@@ -56,6 +56,18 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
+# NUEVA FUNCIÓN: Carga de choferes desde el archivo local del repositorio
+@st.cache_data(ttl=60)
+def cargar_lista_choferes():
+    try:
+        # Lee el excel que tenés en tu repositorio
+        df_c = pd.read_excel("choferes.xlsx")
+        # Toma la primera columna, quita vacíos y ordena
+        return sorted(df_c.iloc[:, 0].dropna().unique().tolist())
+    except Exception as e:
+        st.warning(f"No se encontró choferes.xlsx, usando datos del historial.")
+        return []
+
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
@@ -72,7 +84,15 @@ def cargar_historial():
         return df
     except: return pd.DataFrame()
 
+# Cargas iniciales
 df_h = cargar_historial()
+lista_personal = cargar_lista_choferes()
+
+# Si no hay nada en el Excel de choferes, usamos los que existan en el historial por seguridad
+if not lista_personal and not df_h.empty:
+    lista_personal = sorted(df_h["Chofer"].unique().tolist())
+elif not lista_personal:
+    lista_personal = ["NUEVO"]
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
@@ -100,7 +120,8 @@ with tabs[0]:
         col1, col2, col3 = st.columns(3)
         with col1:
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            chofer = st.selectbox("👤 Chofer", sorted(df_h["Chofer"].unique().tolist()) if not df_h.empty else ["NUEVO"])
+            # CORRECCIÓN: Ahora usa la lista cargada desde el Excel del repositorio
+            chofer = st.selectbox("👤 Chofer", options=lista_personal)
             precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
             fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
         with col2:
