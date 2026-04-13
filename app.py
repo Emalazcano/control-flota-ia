@@ -119,8 +119,8 @@ with tabs[0]:
             nt = st.text_input("✍️ Nombre Nueva Traza", key="nt_k").upper()
             t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
         with col3:
-            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1)
-            kmf = st.number_input("🏁 KM Final", value=0, step=1, key="kmf_k")
+            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
+            kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d", key="kmf_k")
             lt = st.number_input("⛽ Litros Ticket", key="lt_k")
             ltab = st.number_input("📟 Litros Tablero", key="ltab_k")
             lral = st.number_input("⏳ Litros Ralentí", key="lral_k")
@@ -220,5 +220,17 @@ with tabs[1]:
 with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
+        
+        # 1. Primero ordenamos por fecha real (cronológicamente)
+        df_v = df_v.sort_values("Fecha", ascending=False)
+        
+        # 2. Le damos formato de texto a la fecha para que se vea bien
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-        st.dataframe(df_v.sort_values("Fecha", ascending=False), use_container_width=True)
+        
+        # 3. Aplicamos el formato de puntos a los Kilómetros
+        # Esto quita los decimales y pone el punto de miles
+        for col in ['KM_Ini', 'KM_Fin', 'KM_Recorr']:
+            if col in df_v.columns:
+                df_v[col] = df_v[col].apply(lambda x: "{:,.0f}".format(x).replace(",", "."))
+
+        st.dataframe(df_v, use_container_width=True)
