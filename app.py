@@ -75,7 +75,7 @@ def cargar_historial():
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         return df
-    except: return pd.DataFrame()
+        except: return pd.DataFrame()
         
         # Limpieza de fechas al LEER (dayfirst obligatorio)
         if 'Fecha' in df.columns:
