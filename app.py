@@ -221,18 +221,21 @@ with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
         
-        # 1. Ordenar por fecha real ANTES de convertir a texto
+        # 1. Ordenar cronológicamente (más nuevo arriba)
         df_v = df_v.sort_values("Fecha", ascending=False)
         
-        # 2. Formatear las columnas de Kilómetros con punto de miles
-        columnas_km = ['KM_Ini', 'KM_Fin', 'KM_Recorr']
-        for col in columnas_km:
-            if col in df_v.columns:
-                # Esto convierte 594199 en 594.199
-                df_v[col] = df_v[col].apply(lambda x: "{:,.0f}".format(x).replace(",", "."))
-        
-        # 3. Formatear la fecha para mostrarla como texto
+        # 2. Formatear la fecha para que se vea Día/Mes/Año
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-        
-        # 4. Mostrar la tabla final ordenada y formateada
-        st.dataframe(df_v, use_container_width=True)
+
+        # 3. Mostrar la tabla con CONFIGURACIÓN DE COLUMNAS (La clave está aquí)
+        st.dataframe(
+            df_v,
+            use_container_width=True,
+            column_config={
+                "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
+                "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
+                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
+                "L_Ticket": st.column_config.NumberColumn("Litros", format="%.2f"),
+                "Consumo_L100": st.column_config.NumberColumn("Consumo", format="%.2f")
+            }
+        )
