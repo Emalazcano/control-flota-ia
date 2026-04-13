@@ -6,15 +6,39 @@ from datetime import datetime
 import time
 import os
 
-# --- 1. CONFIGURACIÓN Y ESTILOS ---
+# --- 1. CONFIGURACIÓN Y ESTILOS (AQUÍ ESTÁ LA MAGIA VISUAL) ---
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
+# CSS para que las tarjetas y rankings se vean profesionales
 st.markdown("""
     <style>
-    .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
-    .driver-name { font-weight: bold; font-size: 16px; margin: 5px 0; color: white; }
-    .driver-score { font-size: 22px; color: #4CAF50; font-weight: bold; }
-    .desvio-item { padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3d425a; }
+    /* Estilo para las medallas de eficiencia */
+    .metric-card { 
+        background-color: #1e2130; 
+        padding: 20px; 
+        border-radius: 15px; 
+        border: 1px solid #3d425a; 
+        text-align: center;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+    }
+    .driver-name { font-weight: bold; font-size: 16px; color: #aab; margin-bottom: 5px; }
+    .driver-score { font-size: 28px; color: #4CAF50; font-weight: bold; }
+    
+    /* Estilo para la lista de desvíos */
+    .desvio-item { 
+        padding: 15px; 
+        border-radius: 10px; 
+        margin-bottom: 10px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        border: 1px solid #3d425a;
+        background-color: #1e2130;
+    }
+    .desvio-critico { 
+        background-color: #421212 !important; 
+        border-color: #FF4B4B !important; 
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -33,7 +57,7 @@ if "auth" not in st.session_state:
                 st.error("Clave incorrecta")
     st.stop()
 
-# --- 3. DATOS Y CONEXIONES ---
+# --- 3. CONEXIÓN Y CARGA ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 
@@ -42,15 +66,6 @@ if "precio_gasoil" not in st.session_state:
 
 if "form_reset_key" not in st.session_state:
     st.session_state["form_reset_key"] = 0
-
-@st.cache_data(ttl=600)
-def obtener_choferes():
-    if os.path.exists("choferes.xlsx"):
-        try:
-            xl = pd.read_excel("choferes.xlsx")
-            return sorted(xl.iloc[:, 0].dropna().unique().tolist())
-        except: pass
-    return ["ADELMO JORGE", "BENITEZ DIEGO", "GONZALEZ FABIAN"]
 
 def cargar_historial():
     try:
@@ -65,11 +80,10 @@ def cargar_historial():
             df['Fecha'] = df['Fecha'].dt.normalize()
         return df
     except Exception as e:
-        st.error(f"Error de conexión: {e}")
+        st.error(f"Error: {e}")
         return pd.DataFrame()
 
 df_h = cargar_historial()
-lista_choferes = obtener_choferes()
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
@@ -80,148 +94,87 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
-    km_sugerido = 0.0
-    if not df_h.empty:
-        try:
-            m_buscado = float(movil_sel)
-            df_temp = df_h[df_h["Movil"] == m_buscado].dropna(subset=['Fecha'])
-            if not df_temp.empty:
-                df_temp = df_temp.sort_values("Fecha")
-                km_sugerido = float(df_temp.iloc[-1]["KM_Fin"])
-        except: km_sugerido = 0.0
-
-    if km_sugerido > 0:
-        st.success(f"✅ KM Inicial recuperado: {km_sugerido}")
-
     with st.form(key=f"registro_form_{st.session_state['form_reset_key']}"):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown("##### 🚛 Vehículo")             
+        c1, c2, c3 = st.columns(3)
+        with c1:
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            chofer = st.selectbox("👤 Chofer", lista_choferes)
-            st.session_state["precio_gasoil"] = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
-            fecha_sel = st.date_input("📅 Fecha de Carga", datetime.now())
-        with col2:
-            st.markdown("##### 📍 Ruta")
-            ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            traza_existente = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
-            traza = st.selectbox("🗺️ Traza", traza_existente)
-            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
-            t_final = nt if (traza == "➕ NUEVA" and nt != "") else traza
-        with col3:
-            st.markdown("##### ⛽ Consumo")
-            kmi = st.number_input("🛣️ KM Inicial", value=float(km_sugerido))
-            kmf = st.number_input("🏁 KM Final")
-            lt = st.number_input("⛽ Litros Ticket")
-            ltab = st.number_input("📟 Litros Tablero")
-            lral = st.number_input("⏳ Litros Ralentí")
+            chofer = st.selectbox("👤 Chofer", ["ADELMO JORGE", "BENITEZ DIEGO", "GONZALEZ FABIAN", "VALENTIN ARIEL", "DAVILA FACUNDO"])
+            st.session_state["precio_gasoil"] = st.number_input("💰 Precio Gasoil", value=float(st.session_state["precio_gasoil"]))
+            fecha_sel = st.date_input("📅 Fecha", datetime.now())
+        with c2:
+            ruta_tipo = st.radio("🏔️ Ruta", ["Llano", "Alta Montaña"], horizontal=True)
+            traza = st.selectbox("🗺️ Traza", sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else ["SSJJ-OLAR(SDJ)-SSJJ"])
+            km_i = st.number_input("🛣️ KM Inicial", value=0.0)
+        with c3:
+            km_f = st.number_input("🏁 KM Final", value=0.0)
+            l_t = st.number_input("⛽ Litros Ticket", value=0.0)
+            l_tab = st.number_input("📟 Litros Tablero", value=0.0)
+            l_ral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-            distancia = kmf - kmi
-            consumo = (lt / distancia * 100) if distancia > 0 else 0
-            costo_previa = lt * st.session_state["precio_gasoil"]
-            desvio_n = lt - (ltab + lral)
+        dist = km_f - km_i
+        cons = (l_t / dist * 100) if dist > 0 else 0
+        costo_v = l_t * st.session_state["precio_gasoil"]
+        desv = l_t - (l_tab + l_ral)
 
-            if distancia > 0:
-                st.divider()
-                st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
-                st.info(f"💰 Costo estimado: **${costo_previa:,.0f}**")
-
-        submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-        if submit:
-            if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos.")
-            else:
-                costo_final = lt * st.session_state["precio_gasoil"]
-                nuevo_reg = {
-                    "Fecha": fecha_sel.strftime('%d/%m/%Y'),
-                    "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
-                    "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
-                    "KM_Recorr": distancia, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Consumo_L100": round(consumo, 2), 
-                    "Costo_Total_ARS": round(costo_final, 2),
-                    "Desvio_Neto": round(desvio_n, 2)
-                }
-                with st.spinner("Guardando..."):
-                    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                    conn.update(spreadsheet=URL, data=df_final)
-                    st.success("✅ ¡Registro y costo guardados con éxito!")
-                    st.session_state["form_reset_key"] += 1
-                    time.sleep(1)
-                    st.rerun()
+        if st.form_submit_button("💾 GUARDAR", use_container_width=True):
+            nuevo = {
+                "Fecha": fecha_sel.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
+                "Ruta": ruta_tipo, "Traza": traza, "KM_Ini": km_i, "KM_Fin": km_f, "KM_Recorr": dist,
+                "L_Ticket": l_t, "L_Tablero": l_tab, "L_Ralenti": l_ral, "Consumo_L100": round(cons, 2),
+                "Costo_Total_ARS": round(costo_v, 2), "Desvio_Neto": round(desv, 2)
+            }
+            df_final = pd.concat([df_h, pd.DataFrame([nuevo])], ignore_index=True)
+            conn.update(spreadsheet=URL, data=df_final)
+            st.session_state["form_reset_key"] += 1
+            st.rerun()
 
 # --- TAB 2: OJO DE HALCÓN ---
 with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.dropna(subset=['Fecha']).copy()
-        df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
         
-        st.markdown("### 🔍 Inteligencia de Datos")
-        c_f1, c_f2 = st.columns(2)
-        with c_f1:
-            mes_sel = st.selectbox("📅 Mes de Análisis", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
-        with c_f2:
-            ruta_sel = st.multiselect("🏔️ Filtrar por Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
-
-        df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
-        if mes_sel != "Todos":
-            df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
-
-        # Métricas principales
-        st.divider()
-        m1, m2, m3 = st.columns(3)
-        m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_filtrado["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
-        m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
-        m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
-
-        # Ranking de Eficiencia (CON MEDALLAS)
-        st.divider()
+        # 1. Ranking de Eficiencia (MEDALLAS)
         st.markdown("### 🏆 Ranking de Eficiencia (Top 5)")
-        top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
+        top_eff = df_ana.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
-        for i, row in top_5.iterrows():
-            if i < len(cols):
-                with cols[i]:
-                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+        for i, row in top_eff.iterrows():
+            with cols[i]:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="driver-name">{row['Chofer']}</div>
+                        <div class="driver-score">{row['Consumo_L100']:.1f}</div>
+                        <div style="color:#aab; font-size:12px;">L/100</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-        # Ranking de Desvíos (CON COLORES CRÍTICOS)
+        # 2. Ranking de Desvíos (COLORES)
         st.divider()
         st.markdown("### ⚠️ Ranking de Desvíos de Combustible")
-        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        ca1, ca2 = st.columns(2)
+        df_desv = df_ana.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
+        c_des1, c_des2 = st.columns(2)
         for i, row in df_desv.iterrows():
-            es_critico = row['Desvio_Neto'] > 50
-            target = ca1 if i % 2 == 0 else ca2
-            bg_color = "#421212" if es_critico else "#1e2130"
-            border_color = "#FF4B4B" if es_critico else "#3d425a"
-            
-            target.markdown(f"""
-                <div class="desvio-item" style="background:{bg_color}; border-color:{border_color};">
-                    <b style="color:white;">{row["Chofer"]}</b>
-                    <b style="font-size:18px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
+            clase_critica = "desvio-critico" if row['Desvio_Neto'] > 50 else ""
+            col_target = c_des1 if i % 2 == 0 else c_des2
+            col_target.markdown(f"""
+                <div class="desvio-item {clase_critica}">
+                    <span style="color:white; font-weight:bold;">{row['Chofer']}</span>
+                    <span style="color:white; font-weight:bold; font-size:18px;">{row['Desvio_Neto']:.1f} L</span>
                 </div>
             """, unsafe_allow_html=True)
 
-        # Gráficos finales
+        # 3. Gráficos
         st.divider()
-        st.markdown("### 📊 Gráficos de Impacto")
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            df_t = df_ana.groupby('Mes_Año')['Consumo_L100'].mean().reset_index()
-            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Tendencia de Consumo", color_discrete_sequence=["#00FFC8"])
-            fig_t.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_t, use_container_width=True)
-        with col_g2:
-            df_m = df_filtrado.groupby("Marca")["Consumo_L100"].mean().reset_index()
-            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia: Scania vs Mercedes", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
-            fig_m.update_traces(textposition="outside", texttemplate='%{y:.1f}')
-            fig_m.update_layout(template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_m, use_container_width=True)
+        g1, g2 = st.columns(2)
+        with g1:
+            fig1 = px.area(df_ana.groupby(df_ana['Fecha'].dt.to_period('M'))['Consumo_L100'].mean().reset_index().astype({'Fecha':str}), 
+                           x='Fecha', y='Consumo_L100', title="📈 Tendencia Mensual", color_discrete_sequence=["#00FFC8"])
+            st.plotly_chart(fig1, use_container_width=True)
+        with g2:
+            fig2 = px.bar(df_ana.groupby("Marca")["Consumo_L100"].mean().reset_index(), 
+                          x='Marca', y='Consumo_L100', title="🚛 Scania vs Mercedes", color='Marca')
+            st.plotly_chart(fig2, use_container_width=True)
 
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
-    st.subheader("📜 Historial Completo")
     if not df_h.empty:
-        df_hist = df_h.copy()
-        df_hist = df_hist.sort_values("Fecha", ascending=False)
-        df_hist['Fecha'] = df_hist['Fecha'].dt.strftime('%d/%m/%Y')
-        st.dataframe(df_hist, use_container_width=True)
+        st.dataframe(df_h.sort_values("Fecha", ascending=False), use_container_width=True)
