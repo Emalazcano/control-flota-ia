@@ -39,6 +39,7 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
+# Clave para resetear el formulario
 if "form_reset_key" not in st.session_state:
     st.session_state["form_reset_key"] = 0
 
@@ -53,21 +54,24 @@ def obtener_choferes():
 
 def cargar_historial():
     try:
-        # Leemos los datos tal cual vienen de Sheets
         df = conn.read(spreadsheet=URL, ttl=0)
         
-        # Columnas numéricas seguras
+        # Aseguramos columnas numéricas
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # TRATAMIENTO DE FECHA MEJORADO:
+        # --- LIMPIEZA DE FECHA "A PRUEBA DE BALAS" ---
         if 'Fecha' in df.columns:
-            # Convertimos a datetime forzando el formato día/mes/año
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            # Detecta formatos mixtos (YYYY-MM-DD y DD/MM/YYYY) y quita la hora
+            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce', dayfirst=True)
+            df['Fecha'] = df['Fecha'].dt.normalize()
+            
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error de conexión: {e}")
+        return pd.DataFrame()
 
 df_h = cargar_historial()
 lista_choferes = obtener_choferes()
@@ -85,10 +89,10 @@ with tabs[0]:
     if not df_h.empty:
         try:
             m_buscado = float(movil_sel)
-            ult_reg = df_h[df_h["Movil"] == m_buscado]
-            if not ult_reg.empty:
-                ult_reg = ult_reg.sort_values("Fecha")
-                km_sugerido = float(ult_reg.iloc[-1]["KM_Fin"])
+            df_temp = df_h[df_h["Movil"] == m_buscado].dropna(subset=['Fecha'])
+            if not df_temp.empty:
+                df_temp = df_temp.sort_values("Fecha")
+                km_sugerido = float(df_temp.iloc[-1]["KM_Fin"])
         except: km_sugerido = 0.0
 
     if km_sugerido > 0:
@@ -126,17 +130,15 @@ with tabs[0]:
                 st.divider()
                 st.info(f"📊 Consumo: **{consumo:.1f} L/100**")
                 if consumo < 10 or consumo > 120:
-                    st.error(f"🚨 ERROR: Consumo ({consumo:.1f}) ilógico.")
+                    st.error(f"🚨 Consumo ilógico.")
 
         submit = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
         if submit:
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos.")
-            elif consumo < 10 or consumo > 120:
-                st.error("❌ Consumo imposible.")
             else:
                 nuevo_reg = {
-                    "Fecha": fecha_sel.strftime('%d/%m/%Y'), # Enviamos como texto limpio
+                    "Fecha": fecha_sel.strftime('%d/%m/%Y'),
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": distancia, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
@@ -145,8 +147,8 @@ with tabs[0]:
                 with st.spinner("Guardando..."):
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_final)
-                    st.success("✅ ¡Guardado!")
-                    st.session_state["form_reset_key"] += 1
+                    st.success("✅ ¡Registro guardado!")
+                    st.session_state["form_reset_key"] += 1 # Reset form
                     time.sleep(1)
                     st.rerun()
 
@@ -167,64 +169,52 @@ with tabs[1]:
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        # Métricas
+        # Métricas principales
         st.divider()
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_filtrado["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
-        # Ranking y Desvíos
+        # Ranking de Choferes
         st.divider()
-        st.markdown("### 🏆 Ranking y ⚠️ Desvíos")
+        st.markdown("### 🏆 Ranking de Eficiencia y ⚠️ Desvíos")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         for i, row in top_5.iterrows():
             if i < len(cols):
                 with cols[i]:
-                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
-        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        ca1, ca2 = st.columns(2)
-        for i, row in df_desv.iterrows():
-            exc = row['Desvio_Neto'] > 50
-            target = ca1 if i % 2 == 0 else ca2
-            target.markdown(f'<div style="background:{"#421212" if exc else "#1e2130"};padding:12px;border-radius:8px;border:1px solid {"#FF4B4B" if exc else "#3d425a"};margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><b style="color:white;">{row["Chofer"]}</b><b style="font-size:18px;color:white;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
-
-        # Gráficos
+        # Gráficos Visuales al FINAL
         st.divider()
+        st.markdown("### 📊 Inteligencia de Datos Avanzada")
         col_g1, col_g2 = st.columns(2)
         with col_g1:
+            # Gráfico de Área Suave
             df_t = df_ana.groupby('Mes_Año')['Consumo_L100'].mean().reset_index()
-            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Tendencia Mensual", color_discrete_sequence=["#00FFC8"])
+            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Evolución Mensual", color_discrete_sequence=["#00FFC8"])
+            fig_t.update_traces(mode="lines+markers", line_shape="spline", line_width=3)
             fig_t.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_t, use_container_width=True)
         with col_g2:
+            # Gráfico de Barras con Etiquetas
             df_m = df_filtrado.groupby("Marca")["Consumo_L100"].mean().reset_index()
-            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia de Marcas", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
+            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia: Scania vs Mercedes", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
             fig_m.update_traces(textposition="outside", texttemplate='%{y:.1f}')
             fig_m.update_layout(template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_m, use_container_width=True)
 
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
-    st.subheader("📜 Registros Guardados")
+    st.subheader("📜 Historial de Registros")
     if not df_h.empty:
-        # Copiamos para no afectar el análisis original
         df_hist = df_h.copy()
-        
-        # Nos aseguramos que la fecha se lea bien antes de mostrarla
-        df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha'], errors='coerce')
-        
-        # Ordenamos por fecha (más reciente arriba)
+        # Aseguramos el orden cronológico
         df_hist = df_hist.sort_values("Fecha", ascending=False)
-        
-        # Formateamos para el usuario
+        # Formateamos solo para la vista
         df_hist['Fecha'] = df_hist['Fecha'].dt.strftime('%d/%m/%Y')
-        
-        # Rellenamos cualquier "NaT" o "None" que haya quedado por error
-        df_hist['Fecha'] = df_hist['Fecha'].fillna("S/D")
-        
+        df_hist['Fecha'] = df_hist['Fecha'].fillna("Formato Inválido")
         st.dataframe(df_hist, use_container_width=True)
     else: 
         st.info("No hay datos en el historial.")
