@@ -220,19 +220,19 @@ with tabs[1]:
 with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
-        df_v = df_v.sort_values("Fecha", ascending=False)
-        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-        # 1. Primero ordenamos por fecha real (cronológicamente)
+        
+        # 1. Ordenar por fecha real ANTES de convertir a texto
         df_v = df_v.sort_values("Fecha", ascending=False)
         
-        # 2. Le damos formato de texto a la fecha para que se vea bien
-        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-        
-        # 3. Aplicamos el formato de puntos a los Kilómetros
-        # Esto quita los decimales y pone el punto de miles
-       columnas_km = ['KM_Ini', 'KM_Fin', 'KM_Recorr']
+        # 2. Formatear las columnas de Kilómetros con punto de miles
+        columnas_km = ['KM_Ini', 'KM_Fin', 'KM_Recorr']
         for col in columnas_km:
             if col in df_v.columns:
+                # Esto convierte 594199 en 594.199
                 df_v[col] = df_v[col].apply(lambda x: "{:,.0f}".format(x).replace(",", "."))
-
+        
+        # 3. Formatear la fecha para mostrarla como texto
+        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
+        
+        # 4. Mostrar la tabla final ordenada y formateada
         st.dataframe(df_v, use_container_width=True)
