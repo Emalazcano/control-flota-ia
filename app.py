@@ -14,6 +14,7 @@ st.markdown("""
     .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
     .driver-name { font-weight: bold; font-size: 16px; margin: 5px 0; color: white; }
     .driver-score { font-size: 22px; color: #4CAF50; font-weight: bold; }
+    .desvio-item { padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3d425a; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -165,50 +166,53 @@ with tabs[1]:
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
+        # Métricas principales
         st.divider()
         m1, m2, m3 = st.columns(3)
         m1.markdown(f'<div class="metric-card" style="border-left:5px solid #636EFA;"><p style="color:#aab;font-size:14px;">📉 PROMEDIO</p><h2>{df_filtrado["Consumo_L100"].mean():,.1f} L/100</h2></div>', unsafe_allow_html=True)
         m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
+        # Ranking de Eficiencia (CON MEDALLAS)
         st.divider()
-        st.markdown("### 🏆 Eficiencia por Chofer")
+        st.markdown("### 🏆 Ranking de Eficiencia (Top 5)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         for i, row in top_5.iterrows():
             if i < len(cols):
                 with cols[i]:
-                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-card"><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
-        # --- SECCIÓN RESTAURADA: RANKING DE DESVÍOS ---
+        # Ranking de Desvíos (CON COLORES CRÍTICOS)
         st.divider()
         st.markdown("### ⚠️ Ranking de Desvíos de Combustible")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         ca1, ca2 = st.columns(2)
         for i, row in df_desv.iterrows():
-            # Si el desvío es mayor a 50L, lo marcamos en rojo
             es_critico = row['Desvio_Neto'] > 50
             target = ca1 if i % 2 == 0 else ca2
             bg_color = "#421212" if es_critico else "#1e2130"
             border_color = "#FF4B4B" if es_critico else "#3d425a"
             
             target.markdown(f"""
-                <div style="background:{bg_color}; padding:12px; border-radius:8px; border:1px solid {border_color}; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div class="desvio-item" style="background:{bg_color}; border-color:{border_color};">
                     <b style="color:white;">{row["Chofer"]}</b>
                     <b style="font-size:18px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
                 </div>
             """, unsafe_allow_html=True)
 
+        # Gráficos finales
         st.divider()
+        st.markdown("### 📊 Gráficos de Impacto")
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             df_t = df_ana.groupby('Mes_Año')['Consumo_L100'].mean().reset_index()
-            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Evolución Mensual", color_discrete_sequence=["#00FFC8"])
+            fig_t = px.area(df_t, x='Mes_Año', y='Consumo_L100', title="📈 Tendencia de Consumo", color_discrete_sequence=["#00FFC8"])
             fig_t.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_t, use_container_width=True)
         with col_g2:
             df_m = df_filtrado.groupby("Marca")["Consumo_L100"].mean().reset_index()
-            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Scania vs Mercedes (L/100)", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
+            fig_m = px.bar(df_m, x='Marca', y='Consumo_L100', title="🚛 Eficiencia: Scania vs Mercedes", color='Marca', color_discrete_map={"SCANIA": "#EF553B", "MERCEDES BENZ": "#636EFA"})
             fig_m.update_traces(textposition="outside", texttemplate='%{y:.1f}')
             fig_m.update_layout(template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_m, use_container_width=True)
