@@ -13,8 +13,8 @@ st.markdown("""
     <style>
     .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
     .driver-name { font-weight: bold; font-size: 16px; margin: 5px 0; color: white; }
-    .driver-score { font-size: 22px; color: #4CAF50; font-weight: bold; }
-    .star-rating { color: #FFD700; font-size: 18px; margin-bottom: 5px; }
+    .driver-score { font-size: 24px; color: #4CAF50; font-weight: bold; }
+    .medal-icon { font-size: 32px; margin-bottom: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,18 +52,16 @@ def obtener_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        # Limpieza de columnas numéricas
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # LIMPIEZA DE DATOS REGISTRADOS (Eliminar horas y S/D)
+        # Limpieza de fechas: eliminar horas y S/D
         if 'Fecha' in df.columns:
-            # Convertir a datetime, los errores (como S/D) pasan a NaT y se llenan con hoy
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
             df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())
-            df['Fecha'] = df['Fecha'].dt.normalize() # Quita la hora definitivamente
+            df['Fecha'] = df['Fecha'].dt.normalize()
         return df
     except: return pd.DataFrame()
 
@@ -71,7 +69,7 @@ df_h = cargar_historial()
 lista_choferes = obtener_choferes()
 
 # --- 4. INTERFAZ ---
-st.title("🚚 Inteligencia de Flota y Costos")
+st.title("🚚 Control de Flota ")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón (IA)", "📜 Historial"])
 
 # --- TAB 1: REGISTRO ---
@@ -126,7 +124,6 @@ with tabs[0]:
                 st.error("⚠️ Datos inválidos.")
             else:
                 nuevo_reg = {
-                    # GUARDADO LIMPIO SIN HORA
                     "Fecha": fecha_sel.strftime('%d/%m/%Y'),
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
@@ -166,26 +163,27 @@ with tabs[1]:
         m2.markdown(f'<div class="metric-card" style="border-left:5px solid #00CC96;"><p style="color:#aab;font-size:14px;">⛽ TOTAL CARGADO</p><h2>{df_filtrado["L_Ticket"].sum():,.0f} Lts</h2></div>', unsafe_allow_html=True)
         m3.markdown(f'<div class="metric-card" style="border-left:5px solid #EF553B;"><p style="color:#aab;font-size:14px;">💰 INVERSIÓN</p><h2>$ {df_filtrado["Costo_Total_ARS"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
 
-        # 2. CUADRO DE HONOR (CON ESTRELLAS)
+        # 2. CUADRO DE HONOR (CON MEDALLAS)
         st.divider()
-        st.markdown("### 🏆 Ranking de Eficiencia")
+        st.markdown("### 🏆 Ranking de Eficiencia (Top 5)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
-        # Lógica de Estrellas
-        estrellas_list = ["⭐⭐⭐", "⭐⭐", "⭐⭐", "⭐", "⭐"]
+        
+        # Lógica de Medallas
+        medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
+        
         for i, row in top_5.iterrows():
             if i < len(cols):
                 with cols[i]:
                     st.markdown(f"""
                         <div class="metric-card">
-                            <div class="star-rating">{estrellas_list[i]}</div>
+                            <div class="medal-icon">{medallas[i]}</div>
                             <div class="driver-name">{row["Chofer"]}</div>
                             <div class="driver-score">{row["Consumo_L100"]:.1f}</div>
                             <div style="color:#aab;font-size:12px;">L/100</div>
                         </div>
                     """, unsafe_allow_html=True)
 
-        # RANKING DE DESVÍOS (CON ALERTAS ROJAS)
         st.markdown("##### Historial de Desvíos Mensuales")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
         ca1, ca2 = st.columns(2)
@@ -213,6 +211,5 @@ with tabs[2]:
     st.subheader("📜 Registros Guardados")
     if not df_h.empty:
         df_display = df_h.copy()
-        # Formatear la fecha para la tabla sin hora
         df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
