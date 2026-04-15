@@ -69,16 +69,23 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # --- LECTURA DE FECHAS CORREGIDA ---
+     # --- LECTURA DE FECHAS CORREGIDA ---
         if 'Fecha' in df.columns:
-            # 1. Convertimos a fecha (maneja automáticamente el 0:00:00 de Sheets)
-            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+            # 1. Convertimos lo que venga del Excel a fecha real
+            # dayfirst=True es clave para que entienda que es Día/Mes/Año
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
             
-            # 2. Quitamos la hora para que quede solo el día
+            # 2. Quitamos la hora (el 0:00:00) para que no moleste
             df['Fecha'] = df['Fecha'].dt.normalize()
             
-            # 3. Si hay celdas vacías, ponemos la fecha de hoy
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())    
+            # 3. Solo si la celda está VACÍA de origen, le ponemos hoy
+            # (Quitamos el fillna general que te estaba pisando todo)
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())            
+            # Normalizamos para quitar cualquier hora (0:00:00)
+            df['Fecha'] = df['Fecha'].dt.normalize()
+            
+            # SOLO usamos la fecha de hoy si la celda REALMENTE está vacía en el Excel
+            # (No usamos fillna sobre el resultado anterior para no tapar errores de lectura)    
         return df
     except: return pd.DataFrame()
 
@@ -227,11 +234,10 @@ with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
         
-        # Ordenamos por fecha real
-        df_v = df_v.sort_values("Fecha", ascending=False)
-        
-        # Pasamos la fecha a formato limpio Día/Mes/Año
-        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
+       # Dentro del TAB 3: HISTORIAL
+df_v = df_h.copy()
+df_v = df_v.sort_values("Fecha", ascending=False) # Primero ordenamos
+df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y') # Después pasamos a texto para mostrar
 
         # Mostramos con configuración de columnas para los puntos de miles
         st.dataframe(
