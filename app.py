@@ -69,19 +69,17 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    # --- LECTURA DE FECHAS SEGURA ---
+  # --- LECTURA DE FECHAS DEFINITIVA Y LIMPIA ---
         if 'Fecha' in df.columns:
-            # Forzamos la lectura como día primero (DD/MM/YYYY)
+            # 1. Convertimos a fecha real respetando el día primero
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
             
-            # Limpiamos la hora (el 0:00:00 de Google Sheets)
+            # 2. Quitamos la hora (el 0:00:00)
             df['Fecha'] = df['Fecha'].dt.normalize()
             
-            # SOLO si la celda está vacía en el Excel, ponemos hoy como backup
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())
-            
-            # SOLO usamos la fecha de hoy si la celda REALMENTE está vacía en el Excel
-            # (No usamos fillna sobre el resultado anterior para no tapar errores de lectura)    
+            # 3. SOLO si la celda está VACÍA en el Excel, le ponemos hoy
+            # Una sola vez es suficiente.
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())   
         return df
     except: return pd.DataFrame()
 
