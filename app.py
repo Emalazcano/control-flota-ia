@@ -70,14 +70,14 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
   # --- LECTURA DE FECHAS DEFINITIVA Y LIMPIA ---
- def cargar_historial():
+def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
+
         # --- LECTURA DE FECHAS (Bien tabulado) ---
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
