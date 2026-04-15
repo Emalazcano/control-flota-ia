@@ -232,14 +232,14 @@ with tabs[1]:
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
     if not df_h.empty:
+        # 1. Copiamos y ordenamos (Todo esto con 2 niveles de sangría)
         df_v = df_h.copy()
+        df_v = df_v.sort_values("Fecha", ascending=False)
         
-       # Dentro del TAB 3: HISTORIAL
-df_v = df_h.copy()
-df_v = df_v.sort_values("Fecha", ascending=False) # Primero ordenamos
-df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y') # Después pasamos a texto para mostrar
+        # 2. Pasamos a texto para mostrar
+        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
 
-        # Mostramos con configuración de columnas para los puntos de miles
+        # 3. El st.dataframe debe estar a la misma altura que los de arriba
         st.dataframe(
             df_v,
             use_container_width=True,
