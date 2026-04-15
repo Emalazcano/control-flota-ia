@@ -69,11 +69,15 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # --- LECTURA DE FECHAS CORREGIDA ---
         if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            idx_todavia_nat = df['Fecha'].isna()
-            if idx_todavia_nat.any():
-                df.loc[idx_todavia_nat, 'Fecha'] = pd.to_datetime(df.loc[idx_todavia_nat, 'Fecha'], errors='coerce')
+            # 1. Convertimos a fecha (maneja automáticamente el 0:00:00 de Sheets)
+            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+            
+            # 2. Quitamos la hora para que quede solo el día
+            df['Fecha'] = df['Fecha'].dt.normalize()
+            
+            # 3. Si hay celdas vacías, ponemos la fecha de hoy
             df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())    
         return df
     except: return pd.DataFrame()
@@ -223,21 +227,19 @@ with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
         
-        # 1. Ordenar cronológicamente (más nuevo arriba)
+        # Ordenamos por fecha real
         df_v = df_v.sort_values("Fecha", ascending=False)
         
-        # 2. Formatear la fecha para que se vea Día/Mes/Año
+        # Pasamos la fecha a formato limpio Día/Mes/Año
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
 
-        # 3. Mostrar la tabla con CONFIGURACIÓN DE COLUMNAS (La clave está aquí)
+        # Mostramos con configuración de columnas para los puntos de miles
         st.dataframe(
             df_v,
             use_container_width=True,
             column_config={
                 "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
                 "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
-                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
-                "L_Ticket": st.column_config.NumberColumn("Litros", format="%.2f"),
-                "Consumo_L100": st.column_config.NumberColumn("Consumo", format="%.2f")
+                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d")
             }
         )
