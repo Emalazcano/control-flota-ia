@@ -69,27 +69,22 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-  # --- LECTURA DE FECHAS DEFINITIVA Y LIMPIA ---
-def cargar_historial():
-    try:
-        df = conn.read(spreadsheet=URL, ttl=0)
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
-        for col in num_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # --- LECTURA DE FECHAS (Bien tabulado) ---
+        # --- LECTURA DE FECHAS DEFINITIVA ---
         if 'Fecha' in df.columns:
+            # Forzamos día primero (DD/MM/YYYY)
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            # Quitamos la hora
             df['Fecha'] = df['Fecha'].dt.normalize()
+            # Rellenamos vacíos con hoy
             df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())   
+        
         return df
-    except: 
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
         return pd.DataFrame()
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())   
-        return df
-    except: return pd.DataFrame()
 
+# Carga inicial de datos
 df_h = cargar_historial()
 lista_personal = cargar_lista_choferes()
 
@@ -106,11 +101,6 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    def limpiar_sesion_form():
-        for k in ["kmf_k", "lt_k", "ltab_k", "lral_k", "nt_k"]:
-            if k in st.session_state:
-                st.session_state[k] = 0.0 if k != "nt_k" else ""
-
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
     km_sugerido = 0.0
@@ -130,14 +120,14 @@ with tabs[0]:
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
             traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
             traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-            nt = st.text_input("✍️ Nombre Nueva Traza", key="nt_k").upper()
+            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
         with col3:
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
-            kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d", key="kmf_k")
-            lt = st.number_input("⛽ Litros Ticket", key="lt_k")
-            ltab = st.number_input("📟 Litros Tablero", key="ltab_k")
-            lral = st.number_input("⏳ Litros Ralentí", key="lral_k")
+            kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
+            lt = st.number_input("⛽ Litros Ticket", value=0.0)
+            ltab = st.number_input("📟 Litros Tablero", value=0.0)
+            lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
         if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True):
             dist = int(kmf - kmi)
@@ -146,10 +136,10 @@ with tabs[0]:
             desv = lt - (ltab + lral)
 
             if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos.")
+                st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
             else:
                 nuevo_reg = {
-                    "Fecha": fecha_input.strftime('%d/%m/%Y'),
+                    "Fecha": fecha_input.strftime('%d/%m/%Y'), # Enviamos como texto para evitar 0:00:00
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": dist, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
@@ -158,7 +148,7 @@ with tabs[0]:
                     "Desvio_Neto": round(desv, 2)
                 }
                 
-                with st.spinner("Guardando..."):
+                with st.spinner("Guardando en base de datos..."):
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                     conn.update(spreadsheet=URL, data=df_final)
                     st.session_state["precio_gasoil"] = precio_comb
@@ -178,9 +168,9 @@ with tabs[1]:
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
 
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
-        if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+        if mes_sel != "Todos": 
+            df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        # 1. Ranking de Eficiencia
         st.divider()
         st.subheader("🏆 Ranking de Eficiencia (Top 5)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
@@ -190,7 +180,6 @@ with tabs[1]:
             with cols[i]:
                 st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
-        # 2. Ranking de Desvíos
         st.divider()
         st.subheader("⚠️ Ranking de Desvíos de Combustible")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
@@ -211,10 +200,8 @@ with tabs[1]:
             """
             st.markdown(html_desvio, unsafe_allow_html=True)
 
-        # 3. Gráfico Comparativo de Marcas por Tipo de Ruta
         st.divider()
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
-        # Agrupamos por Ruta y Marca para obtener el promedio
         df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
         
         fig_comp = px.bar(
@@ -224,9 +211,7 @@ with tabs[1]:
             color="Marca",
             barmode="group",
             text_auto='.1f',
-            title="Consumo Promedio (L/100) por Tipo de Ruta y Marca",
-            template="plotly_dark",
-            color_discrete_map={"SCANIA": "#1f77b4", "MERCEDES BENZ": "#ff7f0e"}
+            template="plotly_dark"
         )
         st.plotly_chart(fig_comp, use_container_width=True)
 
@@ -234,9 +219,7 @@ with tabs[1]:
 with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy()
-        # Ordenamos por la fecha real antes de convertirla a texto
         df_v = df_v.sort_values("Fecha", ascending=False)
-        # Convertimos a formato visual
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
 
         st.dataframe(
