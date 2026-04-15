@@ -69,20 +69,16 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-     # --- LECTURA DE FECHAS CORREGIDA ---
+    # --- LECTURA DE FECHAS SEGURA ---
         if 'Fecha' in df.columns:
-            # 1. Convertimos lo que venga del Excel a fecha real
-            # dayfirst=True es clave para que entienda que es Día/Mes/Año
+            # Forzamos la lectura como día primero (DD/MM/YYYY)
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
             
-            # 2. Quitamos la hora (el 0:00:00) para que no moleste
+            # Limpiamos la hora (el 0:00:00 de Google Sheets)
             df['Fecha'] = df['Fecha'].dt.normalize()
             
-            # 3. Solo si la celda está VACÍA de origen, le ponemos hoy
-            # (Quitamos el fillna general que te estaba pisando todo)
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())            
-            # Normalizamos para quitar cualquier hora (0:00:00)
-            df['Fecha'] = df['Fecha'].dt.normalize()
+            # SOLO si la celda está vacía en el Excel, ponemos hoy como backup
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())
             
             # SOLO usamos la fecha de hoy si la celda REALMENTE está vacía en el Excel
             # (No usamos fillna sobre el resultado anterior para no tapar errores de lectura)    
@@ -232,14 +228,12 @@ with tabs[1]:
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
     if not df_h.empty:
-        # 1. Copiamos y ordenamos (Todo esto con 2 niveles de sangría)
         df_v = df_h.copy()
+        # Ordenamos por la fecha real antes de convertirla a texto
         df_v = df_v.sort_values("Fecha", ascending=False)
-        
-        # 2. Pasamos a texto para mostrar
+        # Convertimos a formato visual
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
 
-        # 3. El st.dataframe debe estar a la misma altura que los de arriba
         st.dataframe(
             df_v,
             use_container_width=True,
