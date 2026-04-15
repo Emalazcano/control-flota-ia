@@ -70,15 +70,22 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
   # --- LECTURA DE FECHAS DEFINITIVA Y LIMPIA ---
+        def cargar_historial():
+    try:
+        df = conn.read(spreadsheet=URL, ttl=0)
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        for col in num_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # --- LECTURA DE FECHAS (Bien tabulado) ---
         if 'Fecha' in df.columns:
-            # 1. Convertimos a fecha real respetando el día primero
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            
-            # 2. Quitamos la hora (el 0:00:00)
             df['Fecha'] = df['Fecha'].dt.normalize()
-            
-            # 3. SOLO si la celda está VACÍA en el Excel, le ponemos hoy
-            # Una sola vez es suficiente.
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())   
+        return df
+    except: 
+        return pd.DataFrame()
             df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())   
         return df
     except: return pd.DataFrame()
