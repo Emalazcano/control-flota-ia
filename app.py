@@ -11,12 +11,12 @@ import google.generativeai as genai
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # --- CONFIGURACIÓN DE IA GEMINI ---
-# Usamos .strip() para eliminar cualquier salto de línea accidental al pegar
-raw_key = st.secrets.get("GOOGLE_API_KEY", "")
-api_key_limpia = raw_key.replace("\n", "").replace('"', '').strip()
+# Leemos la clave y le quitamos saltos de línea o espacios accidentales
+api_key_raw = st.secrets.get("GOOGLE_API_KEY", "")
+api_key_final = api_key_raw.replace("\n", "").replace("\r", "").strip().strip('"')
 
-if api_key_limpia:
-    genai.configure(api_key=api_key_limpia)
+if api_key_final:
+    genai.configure(api_key=api_key_final)
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     st.warning("⚠️ El Asistente IA no detecta la clave. Revisá los Secrets.")
