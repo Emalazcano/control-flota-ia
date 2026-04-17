@@ -133,7 +133,11 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+    # Creamos una fila de columnas solo para el encabezado del formulario
+    col_header1, col_header2 = st.columns([1, 3]) # El [1, 3] hace que la primera col sea pequeña
+    
+    with col_header1:
+        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
     km_sugerido = 0.0
     if not df_h.empty:
