@@ -186,9 +186,8 @@ with tabs[0]:
             st.metric("💰 Costo Estimado", f"${costo_viaje:,.0f}")
 
         # 3. BOTÓN DE GUARDADO
-        submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, key="boton_guardar_registro")
-
-   
+            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, key="boton_guardar_registro")
+            
             dist = int(kmf - kmi)
             cons = (lt / dist * 100) if dist > 0 else 0
             costo_viaje = round(lt * precio_comb, 2)
