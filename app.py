@@ -1,4 +1,4 @@
-import streamlit as st  # <--- ESTA DEBE SER SIEMPRE LA FILA 1
+import streamlit as st  # <--- SIEMPRE LA FILA 1
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
@@ -7,39 +7,27 @@ import time
 import os
 import google.generativeai as genai
 
-# --- 1. CONFIGURACIÓN DE PÁGINA (Debe ir antes que los secrets) ---
+# --- 1. CONFIGURACIÓN DE PÁGINA (Única y al principio) ---
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # --- CONFIGURACIÓN DE IA GEMINI ---
+# Corregimos la detección para que el modelo nunca sea None si la clave existe
 if "GOOGLE_API_KEY" in st.secrets:
-    # .strip() elimina espacios invisibles al principio o final
     api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
-    
     genai.configure(api_key=api_key_final)
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
-    st.warning("⚠️ El Asistente IA no detecta la clave. Revisá los Secrets.")
+    st.warning("⚠️ El Asistente IA no detecta la clave. Revisá los Secrets en Streamlit Cloud.")
     model = None
-# --- 1. CONFIGURACIÓN Y ESTILOS ---
-st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
+# --- ESTILOS CSS ---
 st.markdown("""
     <style>
     .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
     .driver-name { font-weight: bold; font-size: 16px; margin: 5px 0; color: white; }
     .driver-score { font-size: 24px; color: #4CAF50; font-weight: bold; }
     .medal-icon { font-size: 32px; margin-bottom: 5px; }
-    
-    .desvio-item { 
-        padding: 12px; 
-        border-radius: 8px; 
-        margin-bottom: 10px; 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        border: 1px solid #3d425a;
-        transition: transform 0.2s;
-    }
+    .desvio-item { padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3d425a; transition: transform 0.2s; }
     .desvio-item:hover { transform: scale(1.02); }
     .desvio-critico { background: #421212 !important; border: 1px solid #FF4B4B !important; }
     .desvio-ok { background: #0c2b18 !important; border: 1px solid #00CC96 !important; }
@@ -93,18 +81,15 @@ def cargar_historial():
     except Exception as e:
         st.error(f"Error al cargar datos: {e}")
         return pd.DataFrame()
-# --- LÓGICA DEL ASISTENTE IA (Pegar en fila 82) ---
+
 def generar_contexto_ia(df):
     if df.empty:
         return "No hay datos disponibles actualmente."
     
-    # Resumen de eficiencia por chofer para la IA
     resumen_eficiencia = df.groupby("Chofer")["Consumo_L100"].mean().sort_values().to_string()
-    
-    # Resumen de desvíos acumulados para detectar alertas
     resumen_desvios = df.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).to_string()
     
-    contexto = f"""
+    return f"""
     Eres el asistente experto de 'Inteligencia de Flota Jujuy'. 
     Tu objetivo es ayudar a optimizar costos y detectar anomalías.
     
@@ -116,7 +101,6 @@ def generar_contexto_ia(df):
     
     Responde de forma profesional, breve y en español.
     """
-    return contexto
 
 # Carga inicial de datos
 df_h = cargar_historial()
@@ -128,13 +112,12 @@ elif not lista_personal:
     lista_personal = ["NUEVO"]
 
 # --- 4. INTERFAZ ---
-st.title("🚚 Inteligencia de Flota y Costos")
+st.title("🚛 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial", "🤖 Asistente IA"])
 
 # --- TAB 1: REGISTRO ---
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
-    
     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
     
     km_sugerido = 0.0
@@ -165,35 +148,28 @@ with tabs[0]:
 
         if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True):
             dist = int(kmf - kmi)
-            cons = (lt / dist * 100) if dist > 0 else 0
-            costo_viaje = round(lt * precio_comb, 2)
-            desv = lt - (ltab + lral)
-
             if kmf <= kmi or lt <= 0 or t_final == "":
                 st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
             else:
+                cons = (lt / dist * 100) if dist > 0 else 0
+                costo_viaje = round(lt * precio_comb, 2)
+                desv = lt - (ltab + lral)
+
                 nuevo_reg = {
-                    "Fecha": fecha_input.strftime('%d/%m/%Y'),
+                    "Fecha": fecha_input, # Guardamos como objeto date para evitar errores de formato
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": dist, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Consumo_L100": round(cons, 2), 
-                    "Costo_Total_ARS": costo_viaje, 
-                    "Desvio_Neto": round(desv, 2)
+                    "Consumo_L100": round(cons, 2), "Costo_Total_ARS": costo_viaje, "Desvio_Neto": round(desv, 2)
                 }
                 
-                with st.spinner("Guardando en base de datos..."):
+                with st.spinner("Guardando..."):
                     df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-
-                    # ✅ CORRECCIÓN: Convertir Fecha a texto plano antes de guardar
-                    # Evita que pandas reintroduzca el timestamp con hora "00:00:00"
-                    df_final['Fecha'] = df_final['Fecha'].apply(
-                        lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
-                    )
-
+                    # Normalizamos la fecha antes de subir para que Sheets la entienda bien
+                    df_final['Fecha'] = pd.to_datetime(df_final['Fecha']).dt.strftime('%d/%m/%Y')
                     conn.update(spreadsheet=URL, data=df_final)
                     st.session_state["precio_gasoil"] = precio_comb
-                    st.success(f"✅ Guardado - Costo del viaje: ${costo_viaje:,.2f}")
+                    st.success(f"✅ Guardado - Costo: ${costo_viaje:,.2f}")
                     time.sleep(1)
                     st.rerun()
 
@@ -202,17 +178,13 @@ with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
-        
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
-
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
-        if mes_sel != "Todos": 
-            df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+        if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        st.divider()
         st.subheader("🏆 Ranking de Eficiencia (Top 5)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
@@ -221,69 +193,32 @@ with tabs[1]:
             with cols[i]:
                 st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
-        st.divider()
-        st.subheader("⚠️ Ranking de Desvíos de Combustible")
+        st.subheader("⚠️ Ranking de Desvíos")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        
-        for i, row in df_desv.iterrows():
-            exc_critico = row['Desvio_Neto'] > 50
-            clase_color = "desvio-critico" if exc_critico else "desvio-ok"
-            icono_alerta = "🚨" if exc_critico else "✅"
-            
-            html_desvio = f"""
-                <div class="desvio-item {clase_color}">
-                    <div>
-                        <span style='color:white; font-size:16px; font-weight:bold;'>{row["Chofer"]}</span>
-                        <br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small>
-                    </div>
-                    <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
-                </div>
-            """
-            st.markdown(html_desvio, unsafe_allow_html=True)
+        for _, row in df_desv.iterrows():
+            exc = row['Desvio_Neto'] > 50
+            st.markdown(f'<div class="desvio-item {"desvio-critico" if exc else "desvio-ok"}"><div><b>{row["Chofer"]}</b><br><small>{"🚨 Crítico" if exc else "✅ OK"}</small></div><b style="font-size:20px;">{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
-        st.divider()
-        st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
-        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
-        
-        fig_comp = px.bar(
-            df_comp, 
-            x="Ruta", 
-            y="Consumo_L100", 
-            color="Marca",
-            barmode="group",
-            text_auto='.1f',
-            template="plotly_dark"
-        )
-        st.plotly_chart(fig_comp, use_container_width=True)
+        st.plotly_chart(px.bar(df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index(), x="Ruta", y="Consumo_L100", color="Marca", barmode="group", template="plotly_dark"), use_container_width=True)
 
 # --- TAB 3: HISTORIAL ---
 with tabs[2]:
     if not df_h.empty:
-        df_v = df_h.copy()
-        df_v = df_v.sort_values("Fecha", ascending=False)
+        df_v = df_h.copy().sort_values("Fecha", ascending=False)
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
+        st.dataframe(df_v, use_container_width=True)
 
-        st.dataframe(
-            df_v,
-            use_container_width=True,
-            column_config={
-                "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
-                "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
-                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d")
-            }
-        )
-# --- TAB 4: ASISTENTE IA (Pegar al final de todo el archivo) ---
+# --- TAB 4: ASISTENTE IA ---
 with tabs[3]:
-    st.subheader("🤖 Consultas con Inteligencia Artificial")
-    pregunta = st.text_input("¿Qué quieres saber sobre la flota?")
-    
-    if pregunta:
-        with st.spinner("Gemini está analizando los datos..."):
-            contexto = generar_contexto_ia(df_h) # La función que pegamos en la fila 82
-            prompt = f"{contexto}\n\nPregunta del usuario: {pregunta}"
-            
-            try:
-                response = model.generate_content(prompt)
-                st.markdown(f"**🤖 Asistente:** {response.text}")
-            except Exception as e:
-                st.error(f"Hubo un error con la IA: {e}")
+    st.subheader("🤖 Consultas con IA")
+    if model is None:
+        st.error("La IA no está disponible porque no se detectó la API Key.")
+    else:
+        pregunta = st.text_input("¿Qué quieres saber sobre la flota?")
+        if pregunta:
+            with st.spinner("Analizando..."):
+                try:
+                    res = model.generate_content(f"{generar_contexto_ia(df_h)}\n\nPregunta: {pregunta}")
+                    st.markdown(f"**🤖 Asistente:** {res.text}")
+                except Exception as e:
+                    st.error(f"Error de IA: {e}")
