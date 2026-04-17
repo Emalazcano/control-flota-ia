@@ -133,54 +133,57 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # 1. ELIMINAMOS duplicados y definimos el móvil AFUERA del form para que sea reactivo
-    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="sel_movil_root")
-    
-    # 2. CALCULAMOS el KM sugerido apenas cambia el móvil arriba
-    km_sugerido = 0.0
-    if not df_h.empty:
-        ult_m = df_h[df_h["Movil"] == movil_sel]
-        if not ult_m.empty:
-            # Ordenamos por fecha para asegurar que sea el último viaje real
-            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
-
-    # 3. AHORA entramos al formulario
-    with st.form("registro_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
+    # Usamos un container para agrupar visualmente el Móvil con el resto
+    with st.container(border=True):
+        col_m1, col_m2 = st.columns([1, 2])
+        with col_m1:
+            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="movil_dinamico")
         
-        with c1:
-            marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            chofer = st.selectbox("👤 Chofer", options=lista_personal)
-            precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
-            fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
+        # Cálculo inmediato del KM (fuera del form para que sea instantáneo)
+        km_sugerido = 0.0
+        if not df_h.empty:
+            ult_m = df_h[df_h["Movil"] == movil_sel]
+            if not ult_m.empty:
+                km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
-        with c2:
-            ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
-            traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
-            t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
+        # Iniciamos el formulario justo debajo del móvil
+        with st.form("registro_form_v2", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
+                chofer = st.selectbox("👤 Chofer", options=lista_personal)
+                precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
+                fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
 
-        with c3:
-            # Usamos el km_sugerido que calculamos en el paso 2
-            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
-            kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
-            lt = st.number_input("⛽ Litros Ticket", value=0.0)
-            ltab = st.number_input("📟 Litros Tablero", value=0.0)
-            lral = st.number_input("⏳ Litros Ralentí", value=0.0)
+            with c2:
+                ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
+                traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
+                traza_sel = st.selectbox("🗺️ Traza", traza_ex)
+                nt = st.text_input("✍️ Nombre Nueva Traza").upper()
+                t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
 
-        # --- VISTA PREVIA (Cálculos en tiempo real) ---
-        dist_viaje = int(kmf - kmi) if kmf > kmi else 0
-        cons_viaje = (lt / dist_viaje * 100) if dist_viaje > 0 and lt > 0 else 0
-        costo_v = lt * precio_comb
+            with c3:
+                # Aquí ya aparece el KM sugerido apenas cambias el móvil arriba
+                kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
+                kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
+                lt = st.number_input("⛽ Litros Ticket", value=0.0)
+                ltab = st.number_input("📟 Litros Tablero", value=0.0)
+                lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-        st.markdown("---")
-        v1, v2, v3 = st.columns(3)
-        v1.metric("📏 KM Recorridos", f"{dist_viaje:,} km")
-        v2.metric("🔢 Consumo", f"{cons_viaje:.1f} L/100")
-        v3.metric("💰 Costo Estimado", f"${costo_v:,.0f}")
+            # --- VISTA PREVIA ---
+            dist_v = int(kmf - kmi) if kmf > kmi else 0
+            cons_v = (lt / dist_v * 100) if dist_v > 0 and lt > 0 else 0
+            costo_v = lt * precio_comb
 
-        submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+            st.markdown("---")
+            v1, v2, v3 = st.columns(3)
+            v1.metric("📏 KM Recorridos", f"{dist_v:,}")
+            v2.metric("🔢 Consumo", f"{cons_v:.1f} L/100")
+            v3.metric("💰 Costo Estimado", f"${costo_v:,.0f}")
+
+            # Botón final
+            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
     # --- LÓGICA DE GUARDADO (Alineada fuera del form) ---
     if submit_button:
