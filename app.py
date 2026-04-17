@@ -189,22 +189,16 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 # TAB 1: REGISTRO — 4 columnas, sin dividers
 # ──────────────────────────────────────────
 with tabs[0]:
-    st.subheader("📝 Nuevo Registro")
+            st.subheader("📝 Nuevo Registro")
 
-    st.subheader("📝 Nuevo Registro")
+            # Esta línea debe estar alineada justo debajo de la 's' de st.subheader
+            km_sugerido = 0.0
 
-        # 1. Definimos el km_sugerido (sin espacios extra al principio)
-        km_sugerido = 0.0
-
-        with st.form("registro_form", clear_on_submit=True):
-            # 2. Creamos las columnas dentro del formulario
-            c1, c2, c3, c4 = st.columns(4)
-
-            with c1:
-                # 3. El móvil ahora vive aquí adentro
-                movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-            
-            # 4. Ahora sí usamos el movil_sel para buscar el kilometraje
+            with st.form("registro_form", clear_on_submit=True):
+                c1, c2, c3, c4 = st.columns(4)
+                
+                with c1:
+                    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
             if not df_h.empty:
                 ult_m = df_h[df_h["Movil"] == movil_sel]
                 if not ult_m.empty:
