@@ -188,28 +188,32 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 # ──────────────────────────────────────────
 # TAB 1: REGISTRO — 4 columnas, sin dividers
 # ──────────────────────────────────────────
-        with tabs[0]:
+with tabs[0]:
             st.subheader("📝 Nuevo Registro")
 
-            # Esta línea debe estar alineada justo debajo de la 's' de st.subheader
             km_sugerido = 0.0
 
             with st.form("registro_form", clear_on_submit=True):
+                # 1. Definimos las columnas UNA SOLA VEZ
                 c1, c2, c3, c4 = st.columns(4)
-                
+
                 with c1:
                     movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-            if not df_h.empty:
-                ult_m = df_h[df_h["Movil"] == movil_sel]
-                if not ult_m.empty:
-                    km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
-            c1, c2, c3, c4 = st.columns(4)
+                    
+                    # 2. Calculamos el km_sugerido inmediatamente después de elegir el móvil
+                    if not df_h.empty:
+                        ult_m = df_h[df_h["Movil"] == movil_sel]
+                        if not ult_m.empty:
+                            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
-        with c1:
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-            marca       = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-            chofer      = st.selectbox("👤 Chofer", options=lista_personal)
-            fecha_input = st.date_input("📅 Fecha", datetime.now())
+                with c2:
+                    marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
+
+                with c3:
+                    chofer = st.selectbox("👤 Chofer", options=lista_personal)
+
+                with c4:
+                    fecha_input = st.date_input("📅 Fecha")
             precio_comb = st.number_input("💰 Precio Litro ($)", value=float(st.session_state["precio_gasoil"]))
 
         with c2:
