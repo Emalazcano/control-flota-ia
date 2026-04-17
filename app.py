@@ -79,6 +79,30 @@ def cargar_historial():
     except Exception as e:
         st.error(f"Error al cargar datos: {e}")
         return pd.DataFrame()
+# --- LÓGICA DEL ASISTENTE IA (Pegar en fila 82) ---
+def generar_contexto_ia(df):
+    if df.empty:
+        return "No hay datos disponibles actualmente."
+    
+    # Resumen de eficiencia por chofer para la IA
+    resumen_eficiencia = df.groupby("Chofer")["Consumo_L100"].mean().sort_values().to_string()
+    
+    # Resumen de desvíos acumulados para detectar alertas
+    resumen_desvios = df.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).to_string()
+    
+    contexto = f"""
+    Eres el asistente experto de 'Inteligencia de Flota Jujuy'. 
+    Tu objetivo es ayudar a optimizar costos y detectar anomalías.
+    
+    Rendimiento promedio (L/100km):
+    {resumen_eficiencia}
+    
+    Desvíos totales acumulados (Litros):
+    {resumen_desvios}
+    
+    Responde de forma profesional, breve y en español.
+    """
+    return contexto
 
 # Carga inicial de datos
 df_h = cargar_historial()
@@ -91,7 +115,7 @@ elif not lista_personal:
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
-tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"])
+tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial", "🤖 Asistente IA"])
 
 # --- TAB 1: REGISTRO ---
 with tabs[0]:
@@ -234,3 +258,32 @@ with tabs[2]:
                 "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d")
             }
         )
+# --- TAB 4: ASISTENTE IA (Pegar al final de todo el archivo) ---
+with tabs[3]:
+    st.subheader("🤖 Consultas con Inteligencia Artificial")
+    st.info("Pregúntame sobre rendimientos, quién es el chofer más eficiente o si hay alertas de combustible.")
+    
+    pregunta = st.text_input("¿Qué quieres saber sobre la flota?")
+    
+    if pregunta:
+        with st.spinner("Analizando historial y tendencias..."):
+            contexto = generar_contexto_ia(df_h)
+            
+            # Aquí la IA analiza los datos. 
+            # (Más adelante podemos conectar la API Key de Gemini para respuestas fluidas)
+            p = pregunta.lower()
+            if "mejor" in p or "eficiente" in p or "ranking" in p:
+                mejor = df_h.groupby("Chofer")["Consumo_L100"].mean().idxmin()
+                valor = df_h.groupby("Chofer")["Consumo_L100"].mean().min()
+                st.write(f"🤖 **Análisis:** Basado en el historial, **{mejor}** es el chofer más eficiente con un promedio de **{valor:.2f} L/100km**.")
+            
+            elif "alerta" in p or "desvio" in p or "perdid" in p:
+                alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum()
+                criticos = alertas[alertas > 50].index.tolist()
+                if criticos:
+                    st.warning(f"🤖 **Atención:** Se detectan desvíos acumulados importantes en: {', '.join(criticos)}.")
+                else:
+                    st.success("🤖 No se detectan anomalías graves de combustible en los registros actuales.")
+            
+            else:
+                st.write("🤖 Entiendo tu consulta. Para darte un análisis detallado basado en lenguaje natural, necesitamos configurar la API Key de Google Gemini.")
