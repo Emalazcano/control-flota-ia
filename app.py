@@ -70,14 +70,10 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # --- LECTURA DE FECHAS DEFINITIVA ---
         if 'Fecha' in df.columns:
-            # Forzamos día primero (DD/MM/YYYY)
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            # Quitamos la hora
             df['Fecha'] = df['Fecha'].dt.normalize()
-            # Rellenamos vacíos con hoy
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())   
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())
         
         return df
     except Exception as e:
@@ -139,7 +135,7 @@ with tabs[0]:
                 st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
             else:
                 nuevo_reg = {
-                    "Fecha": fecha_input.strftime('%d/%m/%Y'), # Enviamos como texto para evitar 0:00:00
+                    "Fecha": fecha_input.strftime('%d/%m/%Y'),
                     "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
                     "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
                     "KM_Recorr": dist, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
@@ -149,12 +145,15 @@ with tabs[0]:
                 }
                 
                 with st.spinner("Guardando en base de datos..."):
-    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-    # ✅ Convertir Fecha a texto plano antes de guardar
-    df_final['Fecha'] = df_final['Fecha'].apply(
-        lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
-    )
-    conn.update(spreadsheet=URL, data=df_final)
+                    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+
+                    # ✅ CORRECCIÓN: Convertir Fecha a texto plano antes de guardar
+                    # Evita que pandas reintroduzca el timestamp con hora "00:00:00"
+                    df_final['Fecha'] = df_final['Fecha'].apply(
+                        lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
+                    )
+
+                    conn.update(spreadsheet=URL, data=df_final)
                     st.session_state["precio_gasoil"] = precio_comb
                     st.success(f"✅ Guardado - Costo del viaje: ${costo_viaje:,.2f}")
                     time.sleep(1)
