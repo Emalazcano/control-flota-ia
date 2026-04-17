@@ -133,86 +133,75 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    with st.form("registro_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            # 1. El usuario elige el móvil
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="movil_registro")
-            
-            # 2. BUSCAMOS EL KM INICIAL AQUÍ MISMO
-            km_sugerido = 0.0
-            if not df_h.empty:
-                # Filtramos los viajes de ese móvil y buscamos el último KM_Fin
-                ult_m = df_h[df_h["Movil"] == movil_sel]
-                if not ult_m.empty:
-                    km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
+    # 1. ELIMINAMOS duplicados y definimos el móvil AFUERA del form para que sea reactivo
+    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="sel_movil_root")
+    
+    # 2. CALCULAMOS el KM sugerido apenas cambia el móvil arriba
+    km_sugerido = 0.0
+    if not df_h.empty:
+        ult_m = df_h[df_h["Movil"] == movil_sel]
+        if not ult_m.empty:
+            # Ordenamos por fecha para asegurar que sea el último viaje real
+            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
+    # 3. AHORA entramos al formulario
+    with st.form("registro_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", options=lista_personal)
             precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
             fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
 
-        with col2:
+        with c2:
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
             traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
             traza_sel = st.selectbox("🗺️ Traza", traza_ex)
             nt = st.text_input("✍️ Nombre Nueva Traza").upper()
             t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
 
-        with col3:
-            # 3. El value ahora recibe el km_sugerido actualizado
+        with c3:
+            # Usamos el km_sugerido que calculamos en el paso 2
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
             kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
             lt = st.number_input("⛽ Litros Ticket", value=0.0)
             ltab = st.number_input("📟 Litros Tablero", value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-        # --- VISTA PREVIA ---
+        # --- VISTA PREVIA (Cálculos en tiempo real) ---
         dist_viaje = int(kmf - kmi) if kmf > kmi else 0
         cons_viaje = (lt / dist_viaje * 100) if dist_viaje > 0 and lt > 0 else 0
-        costo_viaje = lt * precio_comb
+        costo_v = lt * precio_comb
 
         st.markdown("---")
         v1, v2, v3 = st.columns(3)
-        with v1: st.metric("📏 KM Recorridos", f"{dist_viaje:,}")
-        with v2: st.metric("🔢 Consumo", f"{cons_viaje:.1f} L/100")
-        with v3: st.metric("💰 Costo Estimado", f"${costo_viaje:,.0f}")
+        v1.metric("📏 KM Recorridos", f"{dist_viaje:,} km")
+        v2.metric("🔢 Consumo", f"{cons_viaje:.1f} L/100")
+        v3.metric("💰 Costo Estimado", f"${costo_v:,.0f}")
 
         submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-            
-            dist = int(kmf - kmi)
-            cons = (lt / dist * 100) if dist > 0 else 0
-            costo_viaje = round(lt * precio_comb, 2)
-            desv = lt - (ltab + lral)
 
-            if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
-            else:
-                nuevo_reg = {
-                    "Fecha": fecha_input.strftime('%d/%m/%Y'),
-                    "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
-                    "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
-                    "KM_Recorr": dist, "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                    "Consumo_L100": round(cons, 2), 
-                    "Costo_Total_ARS": costo_viaje, 
-                    "Desvio_Neto": round(desv, 2)
-                }
-                
-                with st.spinner("Guardando en base de datos..."):
-                    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-
-                    # ✅ CORRECCIÓN: Convertir Fecha a texto plano antes de guardar
-                    # Evita que pandas reintroduzca el timestamp con hora "00:00:00"
-                    df_final['Fecha'] = df_final['Fecha'].apply(
-                        lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
-                    )
-
-                    conn.update(spreadsheet=URL, data=df_final)
-                    st.session_state["precio_gasoil"] = precio_comb
-                    st.success(f"✅ Guardado - Costo del viaje: ${costo_viaje:,.2f}")
-                    time.sleep(1)
-                    st.rerun()
+    # --- LÓGICA DE GUARDADO (Alineada fuera del form) ---
+    if submit_button:
+        if kmf <= kmi or lt <= 0 or t_final == "":
+            st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
+        else:
+            nuevo_reg = {
+                "Fecha": fecha_input.strftime('%d/%m/%Y'),
+                "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
+                "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
+                "KM_Recorr": int(kmf - kmi), "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
+                "Consumo_L100": round(cons_viaje, 2), "Costo_Total_ARS": round(costo_v, 2), 
+                "Desvio_Neto": round(lt - (ltab + lral), 2)
+            }
+            with st.spinner("Guardando..."):
+                df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                df_final['Fecha'] = df_final['Fecha'].apply(lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x))
+                conn.update(spreadsheet=URL, data=df_final)
+                st.success("✅ Registro guardado con éxito.")
+                time.sleep(1)
+                st.rerun()
 
 # --- TAB 2: OJO DE HALCÓN ---
 with tabs[1]:
