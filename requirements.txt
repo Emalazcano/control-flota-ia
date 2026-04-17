@@ -5,3 +5,4 @@ openpyxl
 scikit-learn
 st-gsheets-connection
 fpdf2
+google-generativeai
