@@ -171,20 +171,29 @@ with tabs[0]:
                 ltab = st.number_input("📟 Litros Tablero", value=0.0)
                 lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-            # --- VISTA PREVIA ---
+           # --- VISTA PREVIA (Cálculos en tiempo real) ---
             dist_v = int(kmf - kmi) if kmf > kmi else 0
             cons_v = (lt / dist_v * 100) if dist_v > 0 and lt > 0 else 0
             costo_v = lt * precio_comb
+            # Nuevo cálculo de desvío
+            desv_v = lt - (ltab + lral)
 
             st.markdown("---")
-            v1, v2, v3 = st.columns(3)
-            v1.metric("📏 KM Recorridos", f"{dist_v:,}")
-            v2.metric("🔢 Consumo", f"{cons_v:.1f} L/100")
-            v3.metric("💰 Costo Estimado", f"${costo_v:,.0f}")
+            # Cambiamos a 4 columnas para que entre el desvío
+            v1, v2, v3, v4 = st.columns(4)
+            
+            with v1:
+                st.metric("📏 KM Recorridos", f"{dist_v:,}")
+            with v2:
+                st.metric("🔢 Consumo", f"{cons_v:.1f} L/100")
+            with v3:
+                st.metric("💰 Costo Estimado", f"${costo_v:,.0f}")
+            with v4:
+                # El desvío aparecerá con color (rojo si es positivo, verde si es negativo/bajo)
+                st.metric("🚨 Desvío (Ltrs)", f"{desv_v:.1f}", delta=f"{desv_v:.1f}", delta_color="inverse")
 
             # Botón final
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-
     # --- LÓGICA DE GUARDADO (Alineada fuera del form) ---
     if submit_button:
         if kmf <= kmi or lt <= 0 or t_final == "":
