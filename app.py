@@ -261,29 +261,15 @@ with tabs[2]:
 # --- TAB 4: ASISTENTE IA (Pegar al final de todo el archivo) ---
 with tabs[3]:
     st.subheader("🤖 Consultas con Inteligencia Artificial")
-    st.info("Pregúntame sobre rendimientos, quién es el chofer más eficiente o si hay alertas de combustible.")
-    
     pregunta = st.text_input("¿Qué quieres saber sobre la flota?")
     
     if pregunta:
-        with st.spinner("Analizando historial y tendencias..."):
-            contexto = generar_contexto_ia(df_h)
+        with st.spinner("Gemini está analizando los datos..."):
+            contexto = generar_contexto_ia(df_h) # La función que pegamos en la fila 82
+            prompt = f"{contexto}\n\nPregunta del usuario: {pregunta}"
             
-            # Aquí la IA analiza los datos. 
-            # (Más adelante podemos conectar la API Key de Gemini para respuestas fluidas)
-            p = pregunta.lower()
-            if "mejor" in p or "eficiente" in p or "ranking" in p:
-                mejor = df_h.groupby("Chofer")["Consumo_L100"].mean().idxmin()
-                valor = df_h.groupby("Chofer")["Consumo_L100"].mean().min()
-                st.write(f"🤖 **Análisis:** Basado en el historial, **{mejor}** es el chofer más eficiente con un promedio de **{valor:.2f} L/100km**.")
-            
-            elif "alerta" in p or "desvio" in p or "perdid" in p:
-                alertas = df_h.groupby("Chofer")["Desvio_Neto"].sum()
-                criticos = alertas[alertas > 50].index.tolist()
-                if criticos:
-                    st.warning(f"🤖 **Atención:** Se detectan desvíos acumulados importantes en: {', '.join(criticos)}.")
-                else:
-                    st.success("🤖 No se detectan anomalías graves de combustible en los registros actuales.")
-            
-            else:
-                st.write("🤖 Entiendo tu consulta. Para darte un análisis detallado basado en lenguaje natural, necesitamos configurar la API Key de Google Gemini.")
+            try:
+                response = model.generate_content(prompt)
+                st.markdown(f"**🤖 Asistente:** {response.text}")
+            except Exception as e:
+                st.error(f"Hubo un error con la IA: {e}")
