@@ -133,21 +133,19 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # Definimos km_sugerido antes de empezar
-    km_sugerido = 0.0
-
     with st.form("registro_form", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            # 1. Primero definimos el Móvil (ahora dentro del form y en tamaño chico)
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+            # 1. El usuario elige el móvil
+            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="movil_registro")
             
-            # 2. Ahora buscamos el KM sugerido para ESE móvil
+            # 2. BUSCAMOS EL KM INICIAL AQUÍ MISMO
+            km_sugerido = 0.0
             if not df_h.empty:
+                # Filtramos los viajes de ese móvil y buscamos el último KM_Fin
                 ult_m = df_h[df_h["Movil"] == movil_sel]
                 if not ult_m.empty:
-                    # Traemos el último KM_Fin registrado
                     km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
@@ -163,30 +161,25 @@ with tabs[0]:
             t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
 
         with col3:
+            # 3. El value ahora recibe el km_sugerido actualizado
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
             kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
             lt = st.number_input("⛽ Litros Ticket", value=0.0)
             ltab = st.number_input("📟 Litros Tablero", value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-        # 1. CÁLCULOS PARA LA VISTA PREVIA (Se ejecutan en tiempo real)
+        # --- VISTA PREVIA ---
         dist_viaje = int(kmf - kmi) if kmf > kmi else 0
         cons_viaje = (lt / dist_viaje * 100) if dist_viaje > 0 and lt > 0 else 0
         costo_viaje = lt * precio_comb
 
-        # 2. DISEÑO DE LA VISTA PREVIA (Agregamos una 4ta columna o debajo de las otras)
         st.markdown("---")
         v1, v2, v3 = st.columns(3)
-        
-        with v1:
-            st.metric("📏 KM Recorridos", f"{dist_viaje:,}")
-        with v2:
-            st.metric("🔢 Consumo", f"{cons_viaje:.1f} L/100")
-        with v3:
-            st.metric("💰 Costo Estimado", f"${costo_viaje:,.0f}")
+        with v1: st.metric("📏 KM Recorridos", f"{dist_viaje:,}")
+        with v2: st.metric("🔢 Consumo", f"{cons_viaje:.1f} L/100")
+        with v3: st.metric("💰 Costo Estimado", f"${costo_viaje:,.0f}")
 
-        # 3. BOTÓN DE GUARDADO
-            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, key="boton_guardar_registro")
+        submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
             
             dist = int(kmf - kmi)
             cons = (lt / dist * 100) if dist > 0 else 0
