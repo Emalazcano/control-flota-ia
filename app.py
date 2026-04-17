@@ -149,8 +149,12 @@ with tabs[0]:
                 }
                 
                 with st.spinner("Guardando en base de datos..."):
-                    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                    conn.update(spreadsheet=URL, data=df_final)
+    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+    # ✅ Convertir Fecha a texto plano antes de guardar
+    df_final['Fecha'] = df_final['Fecha'].apply(
+        lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
+    )
+    conn.update(spreadsheet=URL, data=df_final)
                     st.session_state["precio_gasoil"] = precio_comb
                     st.success(f"✅ Guardado - Costo del viaje: ${costo_viaje:,.2f}")
                     time.sleep(1)
