@@ -1,10 +1,16 @@
+import streamlit as st  # <--- ESTA DEBE SER SIEMPRE LA FILA 1
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import time
 import os
-import google.generativeai as genai  # <--- AGREGAR ESTO
+import google.generativeai as genai
 
-# --- CONFIGURACIÓN DE IA GEMINI ---
+# --- 1. CONFIGURACIÓN DE PÁGINA (Debe ir antes que los secrets) ---
+st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
+
+# --- 2. CONFIGURACIÓN DE IA GEMINI ---
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     model = genai.GenerativeModel('gemini-1.5-flash')
