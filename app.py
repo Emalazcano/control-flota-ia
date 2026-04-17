@@ -193,18 +193,22 @@ with tabs[0]:
 
     st.subheader("📝 Nuevo Registro")
 
-        # Eliminamos la línea suelta del móvil de aquí arriba
-        
+        # 1. Definimos el km_sugerido (sin espacios extra al principio)
         km_sugerido = 0.0
-        # (Mantené tu lógica de km_sugerido igual...)
-        if not df_h.empty:
-            ult_m = df_h[df_h["Movil"] == movil_sel] # Nota: movil_sel se definirá abajo
-            if not ult_m.empty:
-                km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
         with st.form("registro_form", clear_on_submit=True):
+            # 2. Creamos las columnas dentro del formulario
+            c1, c2, c3, c4 = st.columns(4)
+
+            with c1:
+                # 3. El móvil ahora vive aquí adentro
+                movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
             
-            # Aquí es donde dividís el ancho
+            # 4. Ahora sí usamos el movil_sel para buscar el kilometraje
+            if not df_h.empty:
+                ult_m = df_h[df_h["Movil"] == movil_sel]
+                if not ult_m.empty:
+                    km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
             c1, c2, c3, c4 = st.columns(4)
 
         with c1:
