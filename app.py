@@ -188,7 +188,7 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 # ──────────────────────────────────────────
 # TAB 1: REGISTRO — 4 columnas, sin dividers
 # ──────────────────────────────────────────
-with tabs[0]:
+        with tabs[0]:
             st.subheader("📝 Nuevo Registro")
 
             # Esta línea debe estar alineada justo debajo de la 's' de st.subheader
