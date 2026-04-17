@@ -199,17 +199,38 @@ with tabs[0]:
         if kmf <= kmi or lt <= 0 or t_final == "":
             st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
         else:
+            # VOLVEMOS A CALCULAR para asegurar que los datos finales sean exactos
+            dist_final = int(kmf - kmi)
+            cons_final = round((lt / dist_final * 100), 2) if dist_final > 0 else 0
+            costo_final = round(lt * precio_comb, 2)
+            desv_final = round(lt - (ltab + lral), 2)
+
             nuevo_reg = {
                 "Fecha": fecha_input.strftime('%d/%m/%Y'),
-                "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
-                "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf,
-                "KM_Recorr": int(kmf - kmi), "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
-                "Consumo_L100": round(cons_viaje, 2), "Costo_Total_ARS": round(costo_v, 2), 
-                "Desvio_Neto": round(lt - (ltab + lral), 2)
+                "Chofer": chofer, 
+                "Movil": movil_sel, 
+                "Marca": marca,
+                "Ruta": ruta_tipo, 
+                "Traza": t_final, 
+                "KM_Ini": kmi, 
+                "KM_Fin": kmf,
+                "KM_Recorr": dist_final, 
+                "L_Ticket": lt, 
+                "L_Tablero": ltab, 
+                "L_Ralenti": lral,
+                "Consumo_L100": cons_final, 
+                "Costo_Total_ARS": costo_final, 
+                "Desvio_Neto": desv_final
             }
-            with st.spinner("Guardando..."):
+            
+            with st.spinner("Guardando en la base de datos..."):
                 df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                df_final['Fecha'] = df_final['Fecha'].apply(lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x))
+                
+                # Formateo de fecha para Google Sheets
+                df_final['Fecha'] = df_final['Fecha'].apply(
+                    lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
+                )
+
                 conn.update(spreadsheet=URL, data=df_final)
                 st.success("✅ Registro guardado con éxito.")
                 time.sleep(1)
