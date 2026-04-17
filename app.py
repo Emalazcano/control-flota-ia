@@ -11,19 +11,15 @@ import google.generativeai as genai
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # --- CONFIGURACIÓN DE IA GEMINI ---
-# Intentamos obtener la clave de los secrets de forma segura
 if "GOOGLE_API_KEY" in st.secrets:
-    api_key_final = st.secrets["GOOGLE_API_KEY"]
-    # Limpiamos la clave por si se colaron comillas o saltos de línea al pegar
-    api_key_final = api_key_final.strip().strip('"')
+    # .strip() elimina espacios invisibles al principio o final
+    api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
     
     genai.configure(api_key=api_key_final)
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
-    # Este es el mensaje que estás viendo ahora
     st.warning("⚠️ El Asistente IA no detecta la clave. Revisá los Secrets.")
     model = None
-
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
