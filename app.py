@@ -136,9 +136,6 @@ with tabs[0]:
     # Creamos una fila de columnas solo para el encabezado del formulario
     col_header1, col_header2 = st.columns([1, 3]) # El [1, 3] hace que la primera col sea pequeña
     
-    with col_header1:
-        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-    
     km_sugerido = 0.0
     if not df_h.empty:
         ult_m = df_h[df_h["Movil"] == movil_sel]
@@ -148,6 +145,7 @@ with tabs[0]:
     with st.form("registro_form", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
         with col1:
+            movil_sel_form = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
             marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer = st.selectbox("👤 Chofer", options=lista_personal)
             precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
