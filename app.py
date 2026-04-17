@@ -172,7 +172,7 @@ with tabs[0]:
 
         if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, key="boton_guardar_registro"):
 
-        if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True):
+   
             dist = int(kmf - kmi)
             cons = (lt / dist * 100) if dist > 0 else 0
             costo_viaje = round(lt * precio_comb, 2)
