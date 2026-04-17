@@ -170,7 +170,7 @@ with tabs[0]:
             ltab = st.number_input("📟 Litros Tablero", value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
-        boton_guardar = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+        if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, key="boton_guardar_registro"):
 
         if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True):
             dist = int(kmf - kmi)
