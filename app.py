@@ -191,20 +191,24 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
 
-    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+   st.subheader("📝 Nuevo Registro")
 
-    km_sugerido = 0.0
-    if not df_h.empty:
-        ult_m = df_h[df_h["Movil"] == movil_sel]
-        if not ult_m.empty:
-            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
+        # Eliminamos la línea suelta del móvil de aquí arriba
+        
+        km_sugerido = 0.0
+        # (Mantené tu lógica de km_sugerido igual...)
+        if not df_h.empty:
+            ult_m = df_h[df_h["Movil"] == movil_sel] # Nota: movil_sel se definirá abajo
+            if not ult_m.empty:
+                km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
 
-    with st.form("registro_form", clear_on_submit=True):
-
-        # 4 columnas: todo junto, sin separadores
-        c1, c2, c3, c4 = st.columns(4)
+        with st.form("registro_form", clear_on_submit=True):
+            
+            # Aquí es donde dividís el ancho
+            c1, c2, c3, c4 = st.columns(4)
 
         with c1:
+            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
             marca       = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             chofer      = st.selectbox("👤 Chofer", options=lista_personal)
             fecha_input = st.date_input("📅 Fecha", datetime.now())
