@@ -191,7 +191,7 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
 
-   st.subheader("📝 Nuevo Registro")
+    st.subheader("📝 Nuevo Registro")
 
         # Eliminamos la línea suelta del móvil de aquí arriba
         
