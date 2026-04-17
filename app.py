@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import time
-import google.generativeai as genai
+import requests
 
 # ══════════════════════════════════════════
 # 1. CONFIGURACIÓN DE PÁGINA
@@ -12,139 +12,79 @@ import google.generativeai as genai
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # ══════════════════════════════════════════
-# 2. CONFIGURACIÓN GEMINI
+# 2. CONFIGURACIÓN CLAUDE
 # ══════════════════════════════════════════
-if "GOOGLE_API_KEY" in st.secrets:
+ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", None)
+ia_disponible = ANTHROPIC_API_KEY is not None
+
+def consultar_claude(contexto: str, pregunta: str) -> str:
     try:
-        api_key_final = str(st.secrets["GOOGLE_API_KEY"]).strip().replace('"', '').replace("'", "")
-        genai.configure(api_key=api_key_final)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 1024,
+                "system": contexto,
+                "messages": [{"role": "user", "content": pregunta}],
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()["content"][0]["text"]
+    except requests.exceptions.Timeout:
+        return "⏱️ La consulta tardó demasiado. Intentá de nuevo."
+    except requests.exceptions.HTTPError as e:
+        codigo = e.response.status_code
+        if codigo == 401:
+            return "❌ Clave API inválida. Verificá ANTHROPIC_API_KEY en Secrets."
+        elif codigo == 429:
+            return "⚠️ Límite de consultas alcanzado. Esperá unos segundos."
+        else:
+            return f"❌ Error HTTP {codigo}: {e}"
     except Exception as e:
-        st.error(f"❌ Error al configurar Gemini: {e}")
-        model = None
-else:
-    model = None
+        return f"❌ Error inesperado: {e}"
 
 # ══════════════════════════════════════════
 # 3. ESTILOS CSS
 # ══════════════════════════════════════════
 st.markdown("""
     <style>
-    /* ── KPI Cards ── */
-    .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-        margin-bottom: 1.5rem;
-    }
-    .kpi-card {
-        background: #1e2130;
-        border: 1px solid #3d425a;
-        border-radius: 12px;
-        padding: 16px 18px;
-    }
-    .kpi-label {
-        font-size: 11px;
-        color: #8892aa;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 6px;
-    }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+    .kpi-card { background: #1e2130; border: 1px solid #3d425a; border-radius: 12px; padding: 16px 18px; }
+    .kpi-label { font-size: 11px; color: #8892aa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
     .kpi-value { font-size: 28px; font-weight: 600; color: white; }
     .kpi-sub   { font-size: 11px; color: #5a6278; margin-top: 3px; }
     .kpi-good .kpi-value { color: #00CC96; }
     .kpi-warn .kpi-value { color: #FFA500; }
     .kpi-bad  .kpi-value { color: #FF4B4B; }
 
-    /* ── Ranking ── */
-    .ranking-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 10px;
-        margin-bottom: 1.5rem;
-    }
-    .rank-card {
-        background: #1e2130;
-        border: 1px solid #3d425a;
-        border-radius: 12px;
-        padding: 14px 10px;
-        text-align: center;
-    }
+    .ranking-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+    .rank-card { background: #1e2130; border: 1px solid #3d425a; border-radius: 12px; padding: 14px 10px; text-align: center; }
     .rank-card.gold { border: 2px solid #EF9F27; }
     .rank-pos  { font-size: 24px; margin-bottom: 6px; }
-    .rank-name {
-        font-size: 12px; font-weight: 600; color: white;
-        margin-bottom: 4px;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
+    .rank-name { font-size: 12px; font-weight: 600; color: white; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rank-score { font-size: 20px; font-weight: 600; color: #00CC96; }
     .rank-unit  { font-size: 10px; color: #5a6278; }
     .rank-card:not(.gold) .rank-score { color: #8892aa; }
 
-    /* ── Desvíos ── */
-    .desvio-item {
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        transition: transform 0.15s;
-    }
+    .desvio-item { padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.15s; }
     .desvio-item:hover { transform: scale(1.01); }
-    .desvio-critico {
-        border-left: 4px solid #FF4B4B;
-        background: #2a1414;
-        border: 1px solid #5a2020;
-    }
-    .desvio-ok {
-        border-left: 4px solid #00CC96;
-        background: #0d2318;
-        border: 1px solid #0d3d25;
-    }
+    .desvio-critico { background: #2a1414; border: 1px solid #5a2020; border-left: 4px solid #FF4B4B; }
+    .desvio-ok      { background: #0d2318; border: 1px solid #0d3d25; border-left: 4px solid #00CC96; }
 
-    /* ── Badges ── */
-    .badge {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 99px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.03em;
-    }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
     .badge-crit { background: #3a1010; color: #FF4B4B; }
     .badge-ok   { background: #0c2b18; color: #00CC96; }
 
-    /* ── Section title ── */
-    .section-title {
-        font-size: 12px;
-        font-weight: 600;
-        color: #8892aa;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        margin-bottom: 10px;
-        margin-top: 4px;
-    }
+    .section-title { font-size: 12px; font-weight: 600; color: #8892aa; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; margin-top: 4px; }
 
-    /* ── Chat IA ── */
-    .chat-burbuja-user {
-        background: #1e2130;
-        border: 1px solid #3d425a;
-        border-radius: 12px 12px 2px 12px;
-        padding: 12px 16px;
-        margin-bottom: 8px;
-        color: white;
-        font-size: 14px;
-    }
-    .chat-burbuja-ia {
-        background: #0d2318;
-        border: 1px solid #0d3d25;
-        border-radius: 12px 12px 12px 2px;
-        padding: 12px 16px;
-        margin-bottom: 16px;
-        color: #e0ffe8;
-        font-size: 14px;
-    }
+    .chat-burbuja-user { background: #1e2130; border: 1px solid #3d425a; border-radius: 12px 12px 2px 12px; padding: 12px 16px; margin-bottom: 8px; color: white; font-size: 14px; }
+    .chat-burbuja-ia   { background: #0d2318; border: 1px solid #0d3d25; border-radius: 12px 12px 12px 2px; padding: 12px 16px; margin-bottom: 16px; color: #e0ffe8; font-size: 14px; }
     .chat-label-user { font-size: 10px; color: #8892aa; margin-bottom: 4px; }
     .chat-label-ia   { font-size: 10px; color: #00CC96; margin-bottom: 4px; }
     </style>
@@ -175,7 +115,6 @@ URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LC
 
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
-
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
@@ -206,13 +145,16 @@ def cargar_historial():
 
 def generar_contexto_ia(df):
     if df.empty:
-        return "No hay datos disponibles actualmente."
+        return "Sos el asistente experto de 'Inteligencia de Flota Jujuy'. No hay datos disponibles aún."
     resumen_eficiencia = df.groupby("Chofer")["Consumo_L100"].mean().sort_values().to_string()
     resumen_desvios    = df.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).to_string()
     costo_total        = df["Costo_Total_ARS"].sum()
-    return f"""
-Eres el asistente experto de 'Inteligencia de Flota Jujuy'.
+    total_registros    = len(df)
+    marcas             = df.groupby("Marca")["Consumo_L100"].mean().to_string()
+    return f"""Sos el asistente experto de 'Inteligencia de Flota Jujuy', empresa de transporte en Jujuy, Argentina.
 Tu objetivo es ayudar a optimizar costos y detectar anomalías en el consumo de combustible.
+
+DATOS ACTUALES ({total_registros} registros):
 
 Rendimiento promedio por chofer (L/100km) — menor es mejor:
 {resumen_eficiencia}
@@ -220,10 +162,13 @@ Rendimiento promedio por chofer (L/100km) — menor es mejor:
 Desvíos acumulados por chofer (Litros ticket vs tablero+ralentí):
 {resumen_desvios}
 
-Costo total de combustible registrado: ${costo_total:,.0f} ARS
+Consumo promedio por marca:
+{marcas}
 
-Responde de forma profesional, concisa y en español.
-Si detectás anomalías, señalálas con claridad.
+Costo total registrado: ${costo_total:,.0f} ARS
+
+Respondé siempre en español, de forma profesional y concisa.
+Si detectás anomalías, señalálas claramente. Usá solo los datos provistos.
 """
 
 # Carga inicial
@@ -241,7 +186,7 @@ st.title("🚛 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial", "🤖 Asistente IA"])
 
 # ──────────────────────────────────────────
-# TAB 1: REGISTRO
+# TAB 1: REGISTRO — 4 columnas, sin dividers
 # ──────────────────────────────────────────
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
@@ -256,58 +201,48 @@ with tabs[0]:
 
     with st.form("registro_form", clear_on_submit=True):
 
-        # Fila 1: Marca · Ruta · Fecha
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-        with col2:
+        # 4 columnas: todo junto, sin separadores
+        c1, c2, c3, c4 = st.columns(4)
+
+        with c1:
+            marca       = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
+            chofer      = st.selectbox("👤 Chofer", options=lista_personal)
+            fecha_input = st.date_input("📅 Fecha", datetime.now())
+            precio_comb = st.number_input("💰 Precio Litro ($)", value=float(st.session_state["precio_gasoil"]))
+
+        with c2:
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-        with col3:
-            fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
-
-        st.divider()
-
-        # Fila 2: Chofer · Traza · Precio
-        col4, col5, col6 = st.columns(3)
-        with col4:
-            chofer = st.selectbox("👤 Chofer", options=lista_personal)
-        with col5:
             traza_ex  = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
             traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-            nt        = st.text_input("✍️ Nombre Nueva Traza (si aplica)").upper()
+            nt        = st.text_input("✍️ Nueva Traza (si aplica)").upper()
             t_final   = nt if (traza_sel == "➕ NUEVA") else traza_sel
-        with col6:
-            precio_comb = st.number_input("💰 Precio Litro Gasoil ($)", value=float(st.session_state["precio_gasoil"]))
-
-        st.divider()
-
-        # Fila 3: KMs · Litros · Preview
-        col7, col8, col9 = st.columns(3)
-        with col7:
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
             kmf = st.number_input("🏁 KM Final",   value=0, step=1, format="%d")
-        with col8:
+
+        with c3:
             lt   = st.number_input("⛽ Litros Ticket",  value=0.0, step=0.1, format="%.2f")
             ltab = st.number_input("📟 Litros Tablero", value=0.0, step=0.1, format="%.2f")
             lral = st.number_input("⏳ Litros Ralentí", value=0.0, step=0.1, format="%.2f")
-        with col9:
+
+        with c4:
             # Vista previa en tiempo real
             dist_prev  = int(kmf - kmi) if kmf > kmi else 0
             cons_prev  = (lt / dist_prev * 100) if dist_prev > 0 and lt > 0 else 0
             desv_prev  = lt - (ltab + lral)
             costo_prev = lt * precio_comb
-            st.markdown("**Vista previa del viaje**")
+
+            st.markdown("**Vista previa**")
             if dist_prev > 0:
-                st.metric("📏 KM Recorridos",    f"{dist_prev:,} km")
+                st.metric("📏 KM recorridos",  f"{dist_prev:,} km")
             if cons_prev > 0:
-                st.metric("🔢 Consumo estimado", f"{cons_prev:.1f} L/100km")
+                st.metric("🔢 Consumo",        f"{cons_prev:.1f} L/100")
             if lt > 0:
-                st.metric("💵 Costo estimado",   f"${costo_prev:,.0f}")
-                st.metric("⚠️ Desvío estimado",  f"{desv_prev:.1f} L")
+                st.metric("💵 Costo estimado", f"${costo_prev:,.0f}")
+                st.metric("⚠️ Desvío",         f"{desv_prev:.1f} L")
 
-        st.divider()
+        guardado = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, type="primary")
 
-        if st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, type="primary"):
+        if guardado:
             dist        = int(kmf - kmi)
             cons        = (lt / dist * 100) if dist > 0 else 0
             costo_viaje = round(lt * precio_comb, 2)
@@ -358,7 +293,6 @@ with tabs[1]:
         df_ana = df_h.copy()
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
 
-        # Filtros
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel  = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
@@ -370,12 +304,11 @@ with tabs[1]:
 
         st.divider()
 
-        # ── KPIs del período ──
+        # KPIs
         st.markdown('<div class="section-title">Resumen del período</div>', unsafe_allow_html=True)
-
-        consumo_prom = df_f["Consumo_L100"].mean()          if not df_f.empty else 0
-        desvio_total = df_f["Desvio_Neto"].sum()            if not df_f.empty else 0
-        costo_total  = df_f["Costo_Total_ARS"].sum()        if not df_f.empty else 0
+        consumo_prom = df_f["Consumo_L100"].mean()           if not df_f.empty else 0
+        desvio_total = df_f["Desvio_Neto"].sum()             if not df_f.empty else 0
+        costo_total  = df_f["Costo_Total_ARS"].sum()         if not df_f.empty else 0
         alertas      = int((df_f["Desvio_Neto"] > 50).sum()) if not df_f.empty else 0
 
         kpi_consumo = "kpi-good" if consumo_prom < 35 else ("kpi-warn" if consumo_prom < 42 else "kpi-bad")
@@ -409,11 +342,10 @@ with tabs[1]:
 
         st.divider()
 
-        # ── Ranking Top 5 ──
+        # Ranking
         st.markdown('<div class="section-title">🏆 Ranking de eficiencia — Top 5</div>', unsafe_allow_html=True)
         top_5    = df_f.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         medallas = ["🥇", "🥈", "🥉", "4°", "5°"]
-
         ranking_html = '<div class="ranking-grid">'
         for i, row in top_5.iterrows():
             clase_gold    = "gold" if i == 0 else ""
@@ -429,9 +361,8 @@ with tabs[1]:
 
         st.divider()
 
-        # ── Desvíos + Gráfico lado a lado ──
+        # Desvíos + Gráfico
         col_d, col_g = st.columns(2)
-
         with col_d:
             st.markdown('<div class="section-title">⚠️ Desvíos por chofer</div>', unsafe_allow_html=True)
             df_desv = df_f.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
@@ -499,48 +430,48 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("🤖 Asistente de Flota con IA")
 
-    if model is None:
-        st.error("La IA no está disponible. Verificá que GOOGLE_API_KEY esté configurada en Secrets.")
-        st.info("En Streamlit Cloud: Settings → Secrets → agregá `GOOGLE_API_KEY = 'tu_clave'`")
+    if not ia_disponible:
+        st.error("La IA no está configurada.")
+        st.markdown("""
+        **Para activarla:**
+        1. Entrá a [console.anthropic.com](https://console.anthropic.com) → creá cuenta gratuita → generá una API Key (`sk-ant-...`)
+        2. En Streamlit Cloud → tu app → **Settings → Secrets** → agregá:
+        ```
+        ANTHROPIC_API_KEY = "sk-ant-tu_clave_aqui"
+        ```
+        3. Reiniciá la app
+        """)
     else:
-        # Sugerencias rápidas
         st.markdown('<div class="section-title">Consultas rápidas</div>', unsafe_allow_html=True)
         sugerencias = [
             "¿Qué chofer tiene el mayor desvío?",
-            "¿Cuál es el consumo promedio de Scania vs Mercedes?",
-            "¿Hay alguna anomalía en los datos?",
-            "Dame un resumen ejecutivo de la flota",
+            "¿Cuál consume menos, Scania o Mercedes?",
+            "¿Hay anomalías en los datos?",
+            "Dame un resumen ejecutivo",
         ]
         cols_sug = st.columns(4)
         for i, sug in enumerate(sugerencias):
             if cols_sug[i].button(sug, use_container_width=True, key=f"sug_{i}"):
                 st.session_state["pregunta_rapida"] = sug
+                st.rerun()
 
         st.divider()
 
-        # Historial de chat
         for msg in st.session_state["chat_history"]:
             if msg["rol"] == "user":
-                st.markdown(f"""
-                <div class="chat-label-user">Vos</div>
-                <div class="chat-burbuja-user">{msg["texto"]}</div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="chat-label-user">Vos</div><div class="chat-burbuja-user">{msg["texto"]}</div>', unsafe_allow_html=True)
             else:
-                st.markdown(f"""
-                <div class="chat-label-ia">🤖 Asistente IA</div>
-                <div class="chat-burbuja-ia">{msg["texto"]}</div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="chat-label-ia">🤖 Asistente IA</div><div class="chat-burbuja-ia">{msg["texto"]}</div>', unsafe_allow_html=True)
 
-        # Input de pregunta
         pregunta_default = st.session_state.pop("pregunta_rapida", "") if "pregunta_rapida" in st.session_state else ""
         pregunta = st.text_input(
             "¿Qué querés saber sobre la flota?",
             value=pregunta_default,
-            placeholder="Ej: ¿Quién consume más combustible en rutas de montaña?",
+            placeholder="Ej: ¿Quién consume más en rutas de montaña?",
         )
 
         col_enviar, col_limpiar = st.columns([4, 1])
-        enviar  = col_enviar.button("Consultar IA ↗", use_container_width=True, type="primary")
+        enviar  = col_enviar.button("Consultar ↗", use_container_width=True, type="primary")
         limpiar = col_limpiar.button("Limpiar chat", use_container_width=True)
 
         if limpiar:
@@ -550,15 +481,9 @@ with tabs[3]:
         if enviar and pregunta.strip():
             st.session_state["chat_history"].append({"rol": "user", "texto": pregunta})
             with st.spinner("Analizando datos de la flota..."):
-                try:
-                    contexto  = generar_contexto_ia(df_h)
-                    respuesta = model.generate_content(f"{contexto}\n\nPregunta: {pregunta}")
-                    st.session_state["chat_history"].append({"rol": "ia", "texto": respuesta.text})
-                except Exception as e:
-                    st.session_state["chat_history"].append({
-                        "rol": "ia",
-                        "texto": f"❌ Error al consultar la IA: {e}"
-                    })
+                respuesta = consultar_claude(generar_contexto_ia(df_h), pregunta)
+                st.session_state["chat_history"].append({"rol": "ia", "texto": respuesta})
             st.rerun()
+
 
                     
