@@ -10,14 +10,27 @@ import google.generativeai as genai
 # --- 1. CONFIGURACIÓN DE PÁGINA (Única y al principio) ---
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
-# --- CONFIGURACIÓN DE IA GEMINI ---
-# Corregimos la detección para que el modelo nunca sea None si la clave existe
+# --- CONFIGURACIÓN DE IA GEMINI (DIAGNÓSTICO) ---
+# 1. Verificamos qué nombres de secretos existen realmente
+nombres_detectados = list(st.secrets.to_dict().keys())
+
 if "GOOGLE_API_KEY" in st.secrets:
-    api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
-    genai.configure(api_key=api_key_final)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    try:
+        # Usamos un método más robusto para limpiar la clave
+        raw_key = str(st.secrets["GOOGLE_API_KEY"])
+        api_key_final = raw_key.replace('"', '').replace("'", "").strip()
+        
+        genai.configure(api_key=api_key_final)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Si llegamos acá, borramos cualquier advertencia previa
+        st.success("✅ Conexión con Gemini establecida.")
+    except Exception as e:
+        st.error(f"❌ Error al configurar Gemini: {e}")
+        model = None
 else:
-    st.warning("⚠️ El Asistente IA no detecta la clave. Revisá los Secrets en Streamlit Cloud.")
+    # Mostramos qué es lo que está viendo Streamlit para ayudarte a corregirlo
+    st.warning(f"⚠️ No se encuentra 'GOOGLE_API_KEY'.")
+    st.info(f"Nombres de secretos encontrados: {nombres_detectados}")
     model = None
 
 # --- ESTILOS CSS ---
