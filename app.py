@@ -1,4 +1,5 @@
-import streamlit as st  # <--- SIEMPRE LA FILA 1
+import setuptools
+import streamlit as st 
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
