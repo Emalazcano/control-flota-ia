@@ -12,7 +12,7 @@ import requests
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # ══════════════════════════════════════════
-# 2. CONFIGURACIÓN CLAUDE
+# 2. CONFIGURACIÓN IA (ANTHROPIC)
 # ══════════════════════════════════════════
 ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", None)
 ia_disponible = ANTHROPIC_API_KEY is not None
@@ -27,7 +27,7 @@ def consultar_claude(contexto: str, pregunta: str) -> str:
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-haiku-4-5-20251001",
+                "model": "claude-3-haiku-20240307",
                 "max_tokens": 1024,
                 "system": contexto,
                 "messages": [{"role": "user", "content": pregunta}],
@@ -36,18 +36,8 @@ def consultar_claude(contexto: str, pregunta: str) -> str:
         )
         response.raise_for_status()
         return response.json()["content"][0]["text"]
-    except requests.exceptions.Timeout:
-        return "⏱️ La consulta tardó demasiado. Intentá de nuevo."
-    except requests.exceptions.HTTPError as e:
-        codigo = e.response.status_code
-        if codigo == 401:
-            return "❌ Clave API inválida. Verificá ANTHROPIC_API_KEY en Secrets."
-        elif codigo == 429:
-            return "⚠️ Límite de consultas alcanzado. Esperá unos segundos."
-        else:
-            return f"❌ Error HTTP {codigo}: {e}"
     except Exception as e:
-        return f"❌ Error inesperado: {e}"
+        return f"❌ Error: {e}"
 
 # ══════════════════════════════════════════
 # 3. ESTILOS CSS
@@ -62,7 +52,6 @@ st.markdown("""
     .kpi-good .kpi-value { color: #00CC96; }
     .kpi-warn .kpi-value { color: #FFA500; }
     .kpi-bad  .kpi-value { color: #FF4B4B; }
-
     .ranking-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
     .rank-card { background: #1e2130; border: 1px solid #3d425a; border-radius: 12px; padding: 14px 10px; text-align: center; }
     .rank-card.gold { border: 2px solid #EF9F27; }
@@ -70,23 +59,11 @@ st.markdown("""
     .rank-name { font-size: 12px; font-weight: 600; color: white; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rank-score { font-size: 20px; font-weight: 600; color: #00CC96; }
     .rank-unit  { font-size: 10px; color: #5a6278; }
-    .rank-card:not(.gold) .rank-score { color: #8892aa; }
-
-    .desvio-item { padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.15s; }
-    .desvio-item:hover { transform: scale(1.01); }
+    .desvio-item { padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
     .desvio-critico { background: #2a1414; border: 1px solid #5a2020; border-left: 4px solid #FF4B4B; }
     .desvio-ok      { background: #0d2318; border: 1px solid #0d3d25; border-left: 4px solid #00CC96; }
-
-    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-    .badge-crit { background: #3a1010; color: #FF4B4B; }
-    .badge-ok   { background: #0c2b18; color: #00CC96; }
-
-    .section-title { font-size: 12px; font-weight: 600; color: #8892aa; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; margin-top: 4px; }
-
-    .chat-burbuja-user { background: #1e2130; border: 1px solid #3d425a; border-radius: 12px 12px 2px 12px; padding: 12px 16px; margin-bottom: 8px; color: white; font-size: 14px; }
-    .chat-burbuja-ia   { background: #0d2318; border: 1px solid #0d3d25; border-radius: 12px 12px 12px 2px; padding: 12px 16px; margin-bottom: 16px; color: #e0ffe8; font-size: 14px; }
-    .chat-label-user { font-size: 10px; color: #8892aa; margin-bottom: 4px; }
-    .chat-label-ia   { font-size: 10px; color: #00CC96; margin-bottom: 4px; }
+    .chat-burbuja-user { background: #1e2130; border: 1px solid #3d425a; border-radius: 12px 12px 2px 12px; padding: 12px 16px; margin-bottom: 8px; color: white; }
+    .chat-burbuja-ia   { background: #0d2318; border: 1px solid #0d3d25; border-radius: 12px 12px 12px 2px; padding: 12px 16px; margin-bottom: 16px; color: #e0ffe8; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -118,66 +95,21 @@ if "precio_gasoil" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
-@st.cache_data(ttl=60)
-def cargar_lista_choferes():
-    try:
-        df_c = pd.read_excel("choferes.xlsx")
-        return sorted(df_c.iloc[:, 0].dropna().unique().tolist())
-    except:
-        return []
-
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti",
-                    "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            df['Fecha'] = df['Fecha'].dt.normalize()
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.now().normalize())
         return df
-    except Exception as e:
-        st.error(f"Error al cargar datos: {e}")
+    except:
         return pd.DataFrame()
 
-def generar_contexto_ia(df):
-    if df.empty:
-        return "Sos el asistente experto de 'Inteligencia de Flota Jujuy'. No hay datos disponibles aún."
-    resumen_eficiencia = df.groupby("Chofer")["Consumo_L100"].mean().sort_values().to_string()
-    resumen_desvios    = df.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).to_string()
-    costo_total        = df["Costo_Total_ARS"].sum()
-    total_registros    = len(df)
-    marcas             = df.groupby("Marca")["Consumo_L100"].mean().to_string()
-    return f"""Sos el asistente experto de 'Inteligencia de Flota Jujuy', empresa de transporte en Jujuy, Argentina.
-Tu objetivo es ayudar a optimizar costos y detectar anomalías en el consumo de combustible.
-
-DATOS ACTUALES ({total_registros} registros):
-
-Rendimiento promedio por chofer (L/100km) — menor es mejor:
-{resumen_eficiencia}
-
-Desvíos acumulados por chofer (Litros ticket vs tablero+ralentí):
-{resumen_desvios}
-
-Consumo promedio por marca:
-{marcas}
-
-Costo total registrado: ${costo_total:,.0f} ARS
-
-Respondé siempre en español, de forma profesional y concisa.
-Si detectás anomalías, señalálas claramente. Usá solo los datos provistos.
-"""
-
-# Carga inicial
-df_h           = cargar_historial()
-lista_personal = cargar_lista_choferes()
-if not lista_personal and not df_h.empty:
-    lista_personal = sorted(df_h["Chofer"].unique().tolist())
-elif not lista_personal:
-    lista_personal = ["NUEVO"]
+df_h = cargar_historial()
+lista_personal = sorted(df_h["Chofer"].unique().tolist()) if not df_h.empty else ["NUEVO"]
 
 # ══════════════════════════════════════════
 # 6. INTERFAZ PRINCIPAL
@@ -185,109 +117,70 @@ elif not lista_personal:
 st.title("🚛 Inteligencia de Flota y Costos")
 tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial", "🤖 Asistente IA"])
 
-# ──────────────────────────────────────────
-# TAB 1: REGISTRO — 4 columnas, sin dividers
-# ──────────────────────────────────────────
+# TAB 1: REGISTRO
 with tabs[0]:
-            st.subheader("📝 Nuevo Registro")
+    st.subheader("📝 Nuevo Registro")
+    km_sugerido = 0.0
 
-            km_sugerido = 0.0
+    with st.form("registro_form", clear_on_submit=True):
+        c1, c2, c3, c4 = st.columns(4)
 
-            with st.form("registro_form", clear_on_submit=True):
-                # 1. Definimos las columnas UNA SOLA VEZ
-                c1, c2, c3, c4 = st.columns(4)
-
-                with c1:
-                    movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
-                    
-                    # 2. Calculamos el km_sugerido inmediatamente después de elegir el móvil
-                    if not df_h.empty:
-                        ult_m = df_h[df_h["Movil"] == movil_sel]
-                        if not ult_m.empty:
-                            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
-
-                with c2:
-                    marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
-
-                with c3:
-                    chofer = st.selectbox("👤 Chofer", options=lista_personal)
-
-                with c4:
-                    fecha_input = st.date_input("📅 Fecha")
-            precio_comb = st.number_input("💰 Precio Litro ($)", value=float(st.session_state["precio_gasoil"]))
+        with c1:
+            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36)
+            if not df_h.empty:
+                ult_m = df_h[df_h["Movil"] == movil_sel]
+                if not ult_m.empty:
+                    km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
+            
+            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1)
+            kmf = st.number_input("🏁 KM Final", value=0, step=1)
 
         with c2:
+            marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
             ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            traza_ex  = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
+            traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].unique().tolist()) if not df_h.empty else [])
             traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-            nt        = st.text_input("✍️ Nueva Traza (si aplica)").upper()
-            t_final   = nt if (traza_sel == "➕ NUEVA") else traza_sel
-            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
-            kmf = st.number_input("🏁 KM Final",   value=0, step=1, format="%d")
+            nt = st.text_input("✍️ Nueva Traza").upper()
+            t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
 
         with c3:
-            lt   = st.number_input("⛽ Litros Ticket",  value=0.0, step=0.1, format="%.2f")
-            ltab = st.number_input("📟 Litros Tablero", value=0.0, step=0.1, format="%.2f")
-            lral = st.number_input("⏳ Litros Ralentí", value=0.0, step=0.1, format="%.2f")
+            chofer = st.selectbox("👤 Chofer", options=lista_personal)
+            fecha_input = st.date_input("📅 Fecha")
+            precio_comb = st.number_input("💰 Precio Litro ($)", value=float(st.session_state["precio_gasoil"]))
+            st.divider()
+            lt = st.number_input("⛽ Litros Ticket", value=0.0)
+            ltab = st.number_input("📟 Litros Tablero", value=0.0)
+            lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
         with c4:
-            # Vista previa en tiempo real
-            dist_prev  = int(kmf - kmi) if kmf > kmi else 0
-            cons_prev  = (lt / dist_prev * 100) if dist_prev > 0 and lt > 0 else 0
-            desv_prev  = lt - (ltab + lral)
-            costo_prev = lt * precio_comb
-
-            st.markdown("**Vista previa**")
-            if dist_prev > 0:
-                st.metric("📏 KM recorridos",  f"{dist_prev:,} km")
-            if cons_prev > 0:
-                st.metric("🔢 Consumo",        f"{cons_prev:.1f} L/100")
-            if lt > 0:
-                st.metric("💵 Costo estimado", f"${costo_prev:,.0f}")
-                st.metric("⚠️ Desvío",         f"{desv_prev:.1f} L")
+            dist_prev = int(kmf - kmi) if kmf > kmi else 0
+            cons_prev = (lt / dist_prev * 100) if dist_prev > 0 and lt > 0 else 0
+            st.markdown("### Vista previa")
+            st.metric("📏 KM Recorridos", f"{dist_prev:,}")
+            st.metric("🔢 Consumo", f"{cons_prev:.1f} L/100")
+            st.metric("💵 Costo", f"${(lt * precio_comb):,.0f}")
 
         guardado = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True, type="primary")
 
-        if guardado:
-            dist        = int(kmf - kmi)
-            cons        = (lt / dist * 100) if dist > 0 else 0
-            costo_viaje = round(lt * precio_comb, 2)
-            desv        = lt - (ltab + lral)
-
-            if kmf <= kmi or lt <= 0 or t_final == "":
-                st.error("⚠️ Datos inválidos. Verificá KM Final > KM Inicial, Litros > 0 y Traza completa.")
-            else:
-                nuevo_reg = {
-                    "Fecha":           fecha_input.strftime('%d/%m/%Y'),
-                    "Chofer":          chofer,
-                    "Movil":           movil_sel,
-                    "Marca":           marca,
-                    "Ruta":            ruta_tipo,
-                    "Traza":           t_final,
-                    "KM_Ini":          kmi,
-                    "KM_Fin":          kmf,
-                    "KM_Recorr":       dist,
-                    "L_Ticket":        lt,
-                    "L_Tablero":       ltab,
-                    "L_Ralenti":       lral,
-                    "Consumo_L100":    round(cons, 2),
-                    "Costo_Total_ARS": costo_viaje,
-                    "Desvio_Neto":     round(desv, 2),
-                }
-                with st.spinner("Guardando en base de datos..."):
-                    df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                    # ✅ Fecha como texto puro — evita timestamp 00:00:00 en Sheets
-                    df_final['Fecha'] = df_final['Fecha'].apply(
-                        lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x)
-                    )
-                    conn.update(spreadsheet=URL, data=df_final)
-                    st.session_state["precio_gasoil"] = precio_comb
-                    st.success(
-                        f"✅ Guardado — {chofer} · Móvil {movil_sel} · "
-                        f"Costo: ${costo_viaje:,.2f} · Desvío: {desv:.1f} L"
-                    )
-                    time.sleep(1)
-                    st.rerun()
+    if guardado:
+        if kmf <= kmi or lt <= 0:
+            st.error("Datos inválidos.")
+        else:
+            dist = int(kmf - kmi)
+            nuevo_reg = {
+                "Fecha": fecha_input.strftime('%d/%m/%Y'),
+                "Chofer": chofer, "Movil": movil_sel, "Marca": marca, "Ruta": ruta_tipo,
+                "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist,
+                "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral,
+                "Consumo_L100": round((lt / dist * 100), 2),
+                "Costo_Total_ARS": round(lt * precio_comb, 2),
+                "Desvio_Neto": round(lt - (ltab + lral), 2),
+            }
+            df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+            conn.update(spreadsheet=URL, data=df_final)
+            st.success("✅ ¡Guardado!")
+            time.sleep(1)
+            st.rerun()
 
 # ──────────────────────────────────────────
 # TAB 2: OJO DE HALCÓN
