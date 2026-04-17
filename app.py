@@ -18,10 +18,10 @@ if "GOOGLE_API_KEY" in st.secrets:
     try:
         # Usamos un método más robusto para limpiar la clave
         raw_key = str(st.secrets["GOOGLE_API_KEY"])
-        api_key_final = raw_key.replace('"', '').replace("'", "").strip()
+        api_key_final = raw_key.strip().replace('"', '').replace("'", "")
         
         genai.configure(api_key=api_key_final)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         # Si llegamos acá, borramos cualquier advertencia previa
         st.success("✅ Conexión con Gemini establecida.")
     except Exception as e:
