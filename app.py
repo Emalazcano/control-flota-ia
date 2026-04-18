@@ -131,7 +131,7 @@ tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial"
 
 # --- TAB 1: REGISTRO ---
 with tabs[0]:
-    st.subheader("📝 Nuevo Registro")
+     st.subheader("📝 Nuevo Registro")
     
     # Usamos un container para agrupar visualmente el Móvil con el resto
     with st.container(border=True):
