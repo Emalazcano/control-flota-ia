@@ -219,7 +219,6 @@ with tabs[3]:
     if "messages" not in st.session_state: 
         st.session_state.messages = []
 
-    # Mostrar historial completo en pantalla
     for message in st.session_state.messages:
         with st.chat_message(message["role"]): 
             st.markdown(message["content"])
@@ -235,17 +234,19 @@ with tabs[3]:
         
         with st.chat_message("assistant"):
             with st.spinner("Analizando..."):
-                # Filtramos el historial: solo enviamos los últimos 4 mensajes para no saturar la IA
-                historial_recortado = st.session_state.messages[-4:]
-                
-                # Contexto compacto (solo estadisticas clave)
                 resumen = df_h.groupby('Chofer')['Consumo_L100'].mean().head(5).to_string()
-                ctx = f"Eres experto en Flota Jujuy. Datos clave: {resumen}. Historial reciente: {historial_recortado}"
+                ctx = f"Eres experto en Flota Jujuy. Rendimiento promedio: {resumen}."
                 
-                try:
-                    response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
-                    res_text = response.text
-                    st.markdown(res_text)
-                    st.session_state.messages.append({"role": "assistant", "content": res_text})
-                except Exception as e:
-                    st.error(f"⚠️ Error: {e}")
+                # Intentamos la consulta hasta 2 veces si falla por saturación
+                for intento in range(2):
+                    try:
+                        response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
+                        res_text = response.text
+                        st.markdown(res_text)
+                        st.session_state.messages.append({"role": "assistant", "content": res_text})
+                        break # Si salió bien, salimos del bucle
+                    except Exception as e:
+                        if intento == 0:
+                            time.sleep(5) # Esperamos 5 segundos antes del segundo intento
+                        else:
+                            st.error("⚠️ Límite de cuota excedido. Por favor, espera un minuto e intenta nuevamente. (El plan gratuito tiene límites por minuto).")
