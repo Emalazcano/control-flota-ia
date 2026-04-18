@@ -200,19 +200,16 @@ with tabs[1]:
         st.subheader("⚠️ Ranking de Desvíos de Combustible")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
         
-        # Filtramos solo lo que sea mayor a 5 litros (descartamos ruido y ceros)
-        df_desv = df_desv[df_desv['Desvio_Neto'].abs() > 5].sort_values("Desvio_Neto", ascending=False)
+        # Filtramos estrictamente los que superan 50L
+        df_desv = df_desv[df_desv['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
 
         if df_desv.empty:
-            st.info("✅ Todos los choferes están controlados (sin desvíos significativos).")
+            st.info("✅ No hay desvíos críticos (>50L) registrados.")
         else:
             for i, row in df_desv.iterrows():
-                exc_critico = row['Desvio_Neto'] > 50
-                clase_color = "desvio-critico" if exc_critico else "desvio-ok"
-                icono_alerta = "🚨" if exc_critico else "✅"
                 st.markdown(f"""
-                    <div class="desvio-item {clase_color}">
-                        <div><span style='color:white; font-size:16px; font-weight:bold;'>{row["Chofer"]}</span><br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small></div>
+                    <div class="desvio-item desvio-critico">
+                        <div><span style='color:white; font-size:16px; font-weight:bold;'>{row["Chofer"]}</span><br><small style='color:#aab;'>🚨 Crítico (>50L)</small></div>
                         <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
                     </div>
                 """, unsafe_allow_html=True)
@@ -222,30 +219,19 @@ with tabs[1]:
         st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
         df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index()
         
-        # Filtramos solo lo que sea mayor a 5 litros
-        df_movil = df_movil[df_movil['Desvio_Neto'].abs() > 5].sort_values("Desvio_Neto", ascending=False)
+        # Filtramos estrictamente los que superan 50L
+        df_movil = df_movil[df_movil['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
 
         if df_movil.empty:
-            st.info("✅ Todas las unidades están controladas (sin desvíos significativos).")
+            st.info("✅ No hay desvíos críticos (>50L) registrados.")
         else:
             for i, row in df_movil.iterrows():
-                exc_critico = row['Desvio_Neto'] > 50
-                clase_color = "desvio-critico" if exc_critico else "desvio-ok"
-                icono_alerta = "🚨" if exc_critico else "✅"
                 st.markdown(f"""
-                    <div class="desvio-item {clase_color}">
-                        <div><span style='color:white; font-size:16px; font-weight:bold;'>Unidad Nº {int(row["Movil"])}</span><br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small></div>
+                    <div class="desvio-item desvio-critico">
+                        <div><span style='color:white; font-size:16px; font-weight:bold;'>Unidad Nº {int(row["Movil"])}</span><br><small style='color:#aab;'>🚨 Crítico (>50L)</small></div>
                         <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
                     </div>
                 """, unsafe_allow_html=True)
-        
-        st.divider()
-        st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
-        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
-        fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
-        st.plotly_chart(fig_comp, use_container_width=True)
-    else:
-        st.info("No hay datos.")
 
 # --- TAB 2: HISTORIAL ---
 with tabs[2]:
