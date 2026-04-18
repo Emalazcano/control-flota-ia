@@ -210,10 +210,28 @@ with tabs[1]:
             """, unsafe_allow_html=True)
 
         st.divider()
-        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
+        st.subheader("⚠️ Ranking de Desvíos por Unidad (Móvil)")
+        
+        # Agrupamos por Móvil
         df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        fig_desv = px.bar(df_movil, x="Movil", y="Desvio_Neto", color="Desvio_Neto", color_continuous_scale="RdYlGn_r", template="plotly_dark")
-        st.plotly_chart(fig_desv, use_container_width=True)
+
+        # Generamos las tarjetas estilo "Chofer"
+        for i, row in df_movil.iterrows():
+            # Definimos el límite crítico (ajustalo a 50 si es tu estándar)
+            exc_critico = row['Desvio_Neto'] > 50
+            clase_color = "desvio-critico" if exc_critico else "desvio-ok"
+            icono_alerta = "🚨" if exc_critico else "✅"
+
+            html_movil = f"""
+                <div class="desvio-item {clase_color}">
+                    <div>
+                        <span style='color:white; font-size:16px; font-weight:bold;'>Unidad Nº {int(row["Movil"])}</span>
+                        <br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small>
+                    </div>
+                    <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
+                </div>
+            """
+            st.markdown(html_movil, unsafe_allow_html=True)
         
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
         df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
