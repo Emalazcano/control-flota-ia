@@ -14,13 +14,11 @@ st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 if "GOOGLE_API_KEY" in st.secrets:
     api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
     genai.configure(api_key=api_key_final)
-    # Usamos gemini-2.0-flash por ser rápido y eficiente
     model = genai.GenerativeModel('gemini-2.0-flash')
 else:
     st.warning("⚠️ Clave API no detectada en Secrets.")
     model = None
 
-# CSS personalizado
 st.markdown("""
     <style>
     .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
@@ -162,41 +160,65 @@ with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
+        st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        st.subheader("⚠️ Ranking de Desvíos (>50L)")
+        st.divider()
+        st.subheader("🏆 Ranking de Eficiencia (Top 5)")
+        top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
+        cols = st.columns(5)
+        medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
+        for i, row in top_5.iterrows():
+            with cols[i]:
+                st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader("⚠️ Ranking de Desvíos de Combustible")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
         df_desv = df_desv[df_desv['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
-        
-        if df_desv.empty: st.info("✅ Sin desvíos críticos.")
+
+        if df_desv.empty:
+            st.info("✅ No hay desvíos críticos.")
         else:
             for _, row in df_desv.iterrows():
                 st.markdown(f'<div class="desvio-item desvio-critico"><div><b>{row["Chofer"]}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
+        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index()
+        df_movil = df_movil[df_movil['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
+        
+        if df_movil.empty:
+            st.info("✅ No hay desvíos críticos.")
+        else:
+            for _, row in df_movil.iterrows():
+                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>Unidad Nº {int(row["Movil"])}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+
+        st.divider()
+        st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
+        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
+        fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
+        st.plotly_chart(fig_comp, use_container_width=True)
 
 # --- TAB 2: HISTORIAL ---
 with tabs[2]:
     if not df_h.empty:
         df_v = df_h.copy().sort_values("Fecha", ascending=False)
+        # Aquí formateamos la fecha a DD/MM/YYYY para que no se vea la hora
+        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_v, use_container_width=True)
 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
     st.subheader("🤖 Consultas con IA")
-    
-    # Inicializar historial en sesión
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Mostrar historial de chat
+    if "messages" not in st.session_state: st.session_state.messages = []
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        with st.chat_message(message["role"]): st.markdown(message["content"])
 
-    # Formulario para enviar consultas
     with st.form("ai_form", clear_on_submit=True):
         pregunta = st.text_input("¿Qué quieres saber sobre la flota?", key="input_ia")
         btn_enviar = st.form_submit_button("Consultar IA")
@@ -204,10 +226,8 @@ with tabs[3]:
     if btn_enviar and pregunta and model:
         st.session_state.messages.append({"role": "user", "content": pregunta})
         with st.chat_message("user"): st.markdown(pregunta)
-        
         with st.chat_message("assistant"):
             with st.spinner("Analizando..."):
-                # Generar contexto resumido
                 resumen = df_h.groupby('Chofer')['Consumo_L100'].mean().head(5).to_string()
                 ctx = f"Eres experto en Flota Jujuy. Rendimiento promedio: {resumen}."
                 try:
