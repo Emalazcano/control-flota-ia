@@ -215,9 +215,14 @@ with tabs[2]:
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
     st.subheader("🤖 Consultas con IA")
-    if "messages" not in st.session_state: st.session_state.messages = []
+    
+    if "messages" not in st.session_state: 
+        st.session_state.messages = []
+
+    # Mostrar historial completo en pantalla
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]): st.markdown(message["content"])
+        with st.chat_message(message["role"]): 
+            st.markdown(message["content"])
 
     with st.form("ai_form", clear_on_submit=True):
         pregunta = st.text_input("¿Qué quieres saber sobre la flota?", key="input_ia")
@@ -225,15 +230,22 @@ with tabs[3]:
 
     if btn_enviar and pregunta and model:
         st.session_state.messages.append({"role": "user", "content": pregunta})
-        with st.chat_message("user"): st.markdown(pregunta)
+        with st.chat_message("user"): 
+            st.markdown(pregunta)
+        
         with st.chat_message("assistant"):
             with st.spinner("Analizando..."):
+                # Filtramos el historial: solo enviamos los últimos 4 mensajes para no saturar la IA
+                historial_recortado = st.session_state.messages[-4:]
+                
+                # Contexto compacto (solo estadisticas clave)
                 resumen = df_h.groupby('Chofer')['Consumo_L100'].mean().head(5).to_string()
-                ctx = f"Eres experto en Flota Jujuy. Rendimiento promedio: {resumen}."
+                ctx = f"Eres experto en Flota Jujuy. Datos clave: {resumen}. Historial reciente: {historial_recortado}"
+                
                 try:
                     response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
                     res_text = response.text
                     st.markdown(res_text)
                     st.session_state.messages.append({"role": "assistant", "content": res_text})
                 except Exception as e:
-                    st.error("⚠️ Error: Intenta una consulta más corta o verifica la cuota.")
+                    st.error(f"⚠️ Error: {e}")
