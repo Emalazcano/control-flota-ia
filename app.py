@@ -12,7 +12,7 @@ st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # --- CONFIGURACIÓN DE IA GEMINI ---
 if "GOOGLE_API_KEY" in st.secrets:
-    api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
+    api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
     genai.configure(api_key=api_key_final)
     model = genai.GenerativeModel('gemini-2.0-flash')
 else:
