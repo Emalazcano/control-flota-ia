@@ -232,6 +232,20 @@ with tabs[1]:
                         <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
                     </div>
                 """, unsafe_allow_html=True)
+        st.divider()
+        st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
+        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
+        
+        fig_comp = px.bar(
+            df_comp, 
+            x="Ruta", 
+            y="Consumo_L100", 
+            color="Marca",
+            barmode="group",
+            text_auto='.1f',
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
 
 # --- TAB 2: HISTORIAL ---
 with tabs[2]:
