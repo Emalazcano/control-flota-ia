@@ -14,10 +14,7 @@ st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 if "GOOGLE_API_KEY" in st.secrets:
     api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
     genai.configure(api_key=api_key_final)
-    st.write("--- Modelos disponibles ---")
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        st.write(m.name)
+    model = genai.GenerativeModel('gemini-2.0-flash')
 else:
     st.warning("⚠️ El Asistente IA no detecta la clave. Revisá los Secrets.")
     model = None
