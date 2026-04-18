@@ -198,11 +198,13 @@ with tabs[1]:
         # --- FILTRO DE DESVÍOS (Choferes) ---
         st.divider()
         st.subheader("⚠️ Ranking de Desvíos de Combustible")
-        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        df_desv = df_desv[df_desv['Desvio_Neto'] != 0] # FILTRO
+        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
+        
+        # Filtramos solo lo que sea mayor a 5 litros (descartamos ruido y ceros)
+        df_desv = df_desv[df_desv['Desvio_Neto'].abs() > 5].sort_values("Desvio_Neto", ascending=False)
 
         if df_desv.empty:
-            st.info("✅ Todos los choferes están controlados (sin desvíos).")
+            st.info("✅ Todos los choferes están controlados (sin desvíos significativos).")
         else:
             for i, row in df_desv.iterrows():
                 exc_critico = row['Desvio_Neto'] > 50
@@ -218,11 +220,13 @@ with tabs[1]:
         # --- FILTRO DE DESVÍOS (Unidades) ---
         st.divider()
         st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
-        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        df_movil = df_movil[df_movil['Desvio_Neto'] != 0] # FILTRO
+        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index()
+        
+        # Filtramos solo lo que sea mayor a 5 litros
+        df_movil = df_movil[df_movil['Desvio_Neto'].abs() > 5].sort_values("Desvio_Neto", ascending=False)
 
         if df_movil.empty:
-            st.info("✅ Todas las unidades están controladas (sin desvíos).")
+            st.info("✅ Todas las unidades están controladas (sin desvíos significativos).")
         else:
             for i, row in df_movil.iterrows():
                 exc_critico = row['Desvio_Neto'] > 50
