@@ -134,7 +134,7 @@ with tabs[0]:
      st.subheader("📝 Nuevo Registro")
     
     # Usamos un container para agrupar visualmente el Móvil con el resto
-    with st.container(border=True):
+        with st.container(border=True):
         col_m1, col_m2 = st.columns([1, 2])
         with col_m1:
             movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="movil_dinamico")
