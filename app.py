@@ -195,44 +195,47 @@ with tabs[1]:
             with cols[i]:
                 st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
+        # --- FILTRO DE DESVÍOS (Choferes) ---
         st.divider()
         st.subheader("⚠️ Ranking de Desvíos de Combustible")
         df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-        for i, row in df_desv.iterrows():
-            exc_critico = row['Desvio_Neto'] > 50
-            clase_color = "desvio-critico" if exc_critico else "desvio-ok"
-            icono_alerta = "🚨" if exc_critico else "✅"
-            st.markdown(f"""
-                <div class="desvio-item {clase_color}">
-                    <div><span style='color:white; font-size:16px; font-weight:bold;'>{row["Chofer"]}</span><br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small></div>
-                    <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
-                </div>
-            """, unsafe_allow_html=True)
+        df_desv = df_desv[df_desv['Desvio_Neto'] != 0] # FILTRO
 
-        st.divider()
-        st.subheader("⚠️ Ranking de Desvíos por Unidad (Móvil)")
-        
-        # Agrupamos por Móvil
-        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
-
-        # Generamos las tarjetas estilo "Chofer"
-        for i, row in df_movil.iterrows():
-            # Definimos el límite crítico (ajustalo a 50 si es tu estándar)
-            exc_critico = row['Desvio_Neto'] > 50
-            clase_color = "desvio-critico" if exc_critico else "desvio-ok"
-            icono_alerta = "🚨" if exc_critico else "✅"
-
-            html_movil = f"""
-                <div class="desvio-item {clase_color}">
-                    <div>
-                        <span style='color:white; font-size:16px; font-weight:bold;'>Unidad Nº {int(row["Movil"])}</span>
-                        <br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small>
+        if df_desv.empty:
+            st.info("✅ Todos los choferes están controlados (sin desvíos).")
+        else:
+            for i, row in df_desv.iterrows():
+                exc_critico = row['Desvio_Neto'] > 50
+                clase_color = "desvio-critico" if exc_critico else "desvio-ok"
+                icono_alerta = "🚨" if exc_critico else "✅"
+                st.markdown(f"""
+                    <div class="desvio-item {clase_color}">
+                        <div><span style='color:white; font-size:16px; font-weight:bold;'>{row["Chofer"]}</span><br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small></div>
+                        <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
                     </div>
-                    <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
-                </div>
-            """
-            st.markdown(html_movil, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+
+        # --- FILTRO DE DESVÍOS (Unidades) ---
+        st.divider()
+        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
+        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().sort_values(ascending=False).reset_index()
+        df_movil = df_movil[df_movil['Desvio_Neto'] != 0] # FILTRO
+
+        if df_movil.empty:
+            st.info("✅ Todas las unidades están controladas (sin desvíos).")
+        else:
+            for i, row in df_movil.iterrows():
+                exc_critico = row['Desvio_Neto'] > 50
+                clase_color = "desvio-critico" if exc_critico else "desvio-ok"
+                icono_alerta = "🚨" if exc_critico else "✅"
+                st.markdown(f"""
+                    <div class="desvio-item {clase_color}">
+                        <div><span style='color:white; font-size:16px; font-weight:bold;'>Unidad Nº {int(row["Movil"])}</span><br><small style='color:#aab;'>{icono_alerta} {"Crítico (>50L)" if exc_critico else "Controlado"}</small></div>
+                        <b style="font-size:20px; color:white;">{row["Desvio_Neto"]:.1f} L</b>
+                    </div>
+                """, unsafe_allow_html=True)
         
+        st.divider()
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
         df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
         fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
