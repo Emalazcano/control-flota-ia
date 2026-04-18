@@ -357,3 +357,4 @@ with tabs[3]:
                 st.markdown(f"**🤖 Asistente:** {response.text}")
             except Exception as e:
                 st.error(f"Hubo un error con la IA: {e}")
+
