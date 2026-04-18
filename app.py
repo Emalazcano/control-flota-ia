@@ -279,6 +279,37 @@ with tabs[1]:
                 </div>
             """
             st.markdown(html_desvio, unsafe_allow_html=True)
+        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
+
+if not df_h.empty:
+    # 1. Agrupamos por Móvil y sumamos el desvío
+    df_movil = df_h.groupby("Movil")["Desvio_Neto"].sum().reset_index()
+    
+    # Ordenamos para ver el que tiene más desvío primero
+    df_movil = df_movil.sort_values(by="Desvio_Neto", ascending=False)
+    
+    # 2. Gráfico de Barras con Plotly
+    fig_desv = px.bar(
+        df_movil, 
+        x="Movil", 
+        y="Desvio_Neto", 
+        color="Desvio_Neto",
+        color_continuous_scale="RdYlGn_r", # Rojo para los desvíos altos, verde para los bajos
+        title="Desvío Acumulado por Móvil (Litros)",
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig_desv, use_container_width=True)
+    
+    # 3. Tabla resumen
+    st.write("Detalle de desvíos acumulados:")
+    # Formateamos la tabla para que se vea prolija
+    st.dataframe(
+        df_movil.style.background_gradient(subset=['Desvio_Neto'], cmap='Reds'),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.info("No hay datos suficientes para generar el reporte de desvíos.")
 
         st.divider()
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
