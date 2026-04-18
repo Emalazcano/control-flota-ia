@@ -204,7 +204,6 @@ with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
-        st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
