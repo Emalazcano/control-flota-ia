@@ -295,42 +295,58 @@ with tabs[2]:
 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
-    st.subheader("🤖 Consultas con IA")
+    st.subheader("🤖 Asistente Inteligente")
     
+    # 1. BOTONES DE ACCIÓN RÁPIDA
+    c1, c2, c3, c4 = st.columns(4)
+    pregunta_rapida = None
+    
+    if c1.button("🥇 ¿Mejor Chofer?"):
+        pregunta_rapida = "¿Quién ha sido el chofer más eficiente este mes según los datos?"
+    if c2.button("📊 ¿Móvil más gastador?"):
+        pregunta_rapida = "¿Qué unidad (móvil) ha tenido el consumo de combustible más alto?"
+    if c3.button("⚖️ ¿Comparar Rutas?"):
+        pregunta_rapida = "Compara el consumo promedio entre 'Llano' y 'Alta Montaña'."
+    if c4.button("🔍 Diagnóstico Mensual"):
+        # Extraemos un resumen rápido para la IA
+        resumen_mensual = df_h.groupby('Movil')['Consumo_L100'].mean().to_string()
+        pregunta_rapida = f"Analiza estos consumos de flota y dime si detectas alguna anomalía o móvil con consumo excesivo que requiera mantenimiento urgente: {resumen_mensual}"
+
     if "messages" not in st.session_state: 
         st.session_state.messages = []
 
+    # Mostrar historial
     for message in st.session_state.messages:
         with st.chat_message(message["role"]): 
             st.markdown(message["content"])
 
+    # Formulario para preguntas personalizadas
     with st.form("ai_form", clear_on_submit=True):
-        pregunta = st.text_input("¿Qué quieres saber sobre la flota?", key="input_ia")
+        pregunta_input = st.text_input("¿Qué quieres saber sobre la flota?", key="input_ia")
         btn_enviar = st.form_submit_button("Consultar IA")
 
-    if btn_enviar and pregunta and model:
+    # Lógica de procesamiento
+    pregunta = pregunta_rapida if pregunta_rapida else pregunta_input
+    
+    if (btn_enviar or pregunta_rapida) and pregunta and model:
         st.session_state.messages.append({"role": "user", "content": pregunta})
         with st.chat_message("user"): 
             st.markdown(pregunta)
         
         with st.chat_message("assistant"):
-            with st.spinner("Analizando..."):
-                resumen = df_h.groupby('Chofer')['Consumo_L100'].mean().head(5).to_string()
-                ctx = f"Eres experto en Flota Jujuy. Rendimiento promedio: {resumen}."
+            with st.spinner("Generando diagnóstico..."):
+                ctx = "Eres el jefe de flota de 'Flota Jujuy'. Tu rol es ser crítico y analítico con los datos. Si ves consumos altos, recomiéndame revisar inyectores, filtros o verificar el estilo de manejo del chofer."
                 
-                # Intentamos la consulta hasta 2 veces si falla por saturación
                 for intento in range(2):
                     try:
                         response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
                         res_text = response.text
                         st.markdown(res_text)
                         st.session_state.messages.append({"role": "assistant", "content": res_text})
-                        break # Si salió bien, salimos del bucle
+                        break 
                     except Exception as e:
-                        if intento == 0:
-                            time.sleep(5) # Esperamos 5 segundos antes del segundo intento
-                        else:
-                            st.error("⚠️ Límite de cuota excedido. Por favor, espera un minuto e intenta nuevamente. (El plan gratuito tiene límites por minuto).")
+                        if intento == 0: time.sleep(3)
+                        else: st.error("⚠️ Límite de cuota excedido. Intenta nuevamente en un minuto.")
 # --- TAB 4: ANALÍTICA AVANZADA ---
 with tabs[4]:
     st.subheader("📈 Analítica y Diagnóstico")
