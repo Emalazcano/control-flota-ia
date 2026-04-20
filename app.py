@@ -152,25 +152,45 @@ with tabs[0]:
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
     if submit_button:
-        if kmf <= kmi or lt <= 0 or t_final == "":
-            st.error("⚠️ Datos inválidos. Verifique KM y Litros.")
-        else:
-            dist_final = int(kmf - kmi)
-            cons_final = round((lt / dist_final * 100), 2) if dist_final > 0 else 0
-            costo_final = round(lt * precio_comb, 2)
-            desv_final = round(lt - (ltab + lral), 2)
-            nuevo_reg = {
-                "Fecha": fecha_input.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
-                "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist_final,
-                "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": cons_final,
-                "Costo_Total_ARS": costo_final, "Desvio_Neto": desv_final
-            }
-            with st.spinner("Guardando..."):
-                df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                df_final['Fecha'] = df_final['Fecha'].apply(lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x))
-                conn.update(spreadsheet=URL, data=df_final)
-                st.success("✅ Guardado.")
-                time.sleep(1); st.rerun()
+        # 1. Validación de KM: Que el final sea mayor al inicial
+        if kmf <= kmi:
+            st.error(f"⚠️ Error: El KM Final ({kmf}) debe ser mayor al KM Inicial ({kmi}).")
+            st.stop()
+        
+        # 2. Validación de coherencia de carga
+        if lt <= 0:
+            st.error("⚠️ Error: Debes ingresar los Litros de Ticket.")
+            st.stop()
+
+        # 3. Validación de Consumo Físico (Rango lógico)
+        dist_calculada = kmf - kmi
+        consumo_estimado = (lt / dist_calculada * 100) if dist_calculada > 0 else 0
+        
+        if consumo_estimado > 100 or consumo_estimado < 10:
+            st.warning(f"⚠️ Consumo fuera de rango lógico ({consumo_estimado:.1f} L/100km).")
+            # Esto permite forzar el guardado si el valor es correcto pero inusual
+            if not st.checkbox("Confirmar: ¿Los datos son correctos?"):
+                st.stop()
+
+        # Si supera las validaciones, procedemos con el guardado
+        dist_final = int(kmf - kmi)
+        cons_final = round((lt / dist_final * 100), 2) if dist_final > 0 else 0
+        costo_final = round(lt * precio_comb, 2)
+        desv_final = round(lt - (ltab + lral), 2)
+        
+        nuevo_reg = {
+            "Fecha": fecha_input.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
+            "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist_final,
+            "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": cons_final,
+            "Costo_Total_ARS": costo_final, "Desvio_Neto": desv_final
+        }
+        
+        with st.spinner("Guardando..."):
+            df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+            df_final['Fecha'] = df_final['Fecha'].apply(lambda x: x.strftime('%d/%m/%Y') if hasattr(x, 'strftime') else str(x))
+            conn.update(spreadsheet=URL, data=df_final)
+            st.success("✅ Guardado.")
+            time.sleep(1); st.rerun()
 
 # --- TAB 1: OJO DE HALCÓN ---
 with tabs[1]:
@@ -183,6 +203,12 @@ with tabs[1]:
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+        csv = df_filtrado.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Descargar reporte filtrado (CSV)",
+            data=csv,
+            file_name='reporte_flota.csv',
+            mime='text/csv',    
 
         st.divider()
         st.subheader("🏆 Ranking de Eficiencia (Top 5)")
