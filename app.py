@@ -6,6 +6,44 @@ from datetime import datetime
 import time
 import os
 import google.generativeai as genai
+# --- CSS PARA OPTIMIZACIÓN MÓVIL ---
+st.markdown("""
+    <style>
+    /* Ajustes generales para pantallas pequeñas */
+    @media only screen and (max-width: 600px) {
+        .stMetric {
+            background-color: #f0f2f6;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 20px !important;
+        }
+        /* Botones más grandes para dedos */
+        div.stButton > button {
+            width: 100%;
+            height: 50px;
+            font-size: 16px;
+        }
+        /* Ajustar espaciado de formularios */
+        .stForm {
+            padding: 10px !important;
+        }
+    }
+    /* Mejora visual de tarjetas en todas las pantallas */
+    .metric-card {
+        background: #1e1e1e;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #4a90e2;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    .driver-name { font-weight: bold; font-size: 14px; }
+    .driver-score { font-size: 20px; color: #4a90e2; }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
