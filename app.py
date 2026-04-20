@@ -85,7 +85,7 @@ elif not lista_personal:
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
-tabs = st.tabs(["⛽ Registro de Carga", "🦅 Ojo de Halcón", "📜 Historial", "🤖 Asistente IA"])
+tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial", "🤖 IA", "📈 Analítica"])
 
 # --- TAB 0: REGISTRO ---
 with tabs[0]:
@@ -293,3 +293,33 @@ with tabs[3]:
                             time.sleep(5) # Esperamos 5 segundos antes del segundo intento
                         else:
                             st.error("⚠️ Límite de cuota excedido. Por favor, espera un minuto e intenta nuevamente. (El plan gratuito tiene límites por minuto).")
+# --- TAB 4: ANALÍTICA AVANZADA ---
+with tabs[4]:
+    st.subheader("📈 Analítica y Diagnóstico")
+    
+    # Asegurar formato fecha para gráficos
+    df_ana = df_h.copy()
+    df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'], dayfirst=True)
+    df_ana['Mes'] = df_ana['Fecha'].dt.to_period('M').astype(str)
+
+    # 1. TENDENCIAS (Detectar desgaste mecánico)
+    st.markdown("### 📉 Tendencia de Consumo (Detectar Desgaste)")
+    st.write("Visualiza la evolución del consumo de cada móvil mes a mes.")
+    
+    moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", options=sorted(df_ana['Movil'].unique()), default=[df_ana['Movil'].iloc[0]])
+    df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
+    df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
+    
+    fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", markers=True, template="plotly_dark")
+    st.plotly_chart(fig_line, use_container_width=True)
+
+    st.divider()
+
+    # 2. BENCHMARK (Marca/Modelo vs Ruta)
+    st.markdown("### ⚖️ Benchmark: Marca vs Ruta")
+    st.write("Comparativa de eficiencia según el tipo de terreno.")
+    
+    df_bench = df_ana.groupby(['Marca', 'Ruta'])['Consumo_L100'].mean().reset_index()
+    fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
+                     text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
+    st.plotly_chart(fig_bar, use_container_width=True)
