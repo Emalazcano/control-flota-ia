@@ -96,15 +96,20 @@ with tabs[0]:
             movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="movil_dinamico")
         
         km_sugerido = 0.0
+        idx_marca = 0 # Índice por defecto (Scania)
+        marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
         if not df_h.empty:
             ult_m = df_h[df_h["Movil"] == movil_sel]
             if not ult_m.empty:
                 km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
+                marca_hist = ult_m.sort_values("Fecha").iloc[-1]["Marca"]
+                if marca_hist in marcas_disponibles:
+                    idx_marca = marcas_disponibles.index(marca_hist)
 
         with st.form("registro_form_v2", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
-                marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], horizontal=True)
+                marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True)
                 chofer = st.selectbox("👤 Chofer", options=lista_personal)
                 precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
                 fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
