@@ -293,11 +293,15 @@ with tabs[2]:
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_v, use_container_width=True)
 
-# --- TAB 3: ASISTENTE IA ---
+# --- TAB 3: ASISTENTE IA (OPTIMIZADO PARA AHORRAR CUOTA) ---
 with tabs[3]:
     st.subheader("🤖 Asistente Inteligente")
-    
-    # 1. BOTONES DE ACCIÓN RÁPIDA
+
+    # Inicializar caché en session_state para evitar llamadas repetidas
+    if "ai_cache" not in st.session_state:
+        st.session_state.ai_cache = {}
+
+    # Botones de acción
     c1, c2, c3, c4 = st.columns(4)
     pregunta_rapida = None
     
@@ -308,45 +312,46 @@ with tabs[3]:
     if c3.button("⚖️ ¿Comparar Rutas?"):
         pregunta_rapida = "Compara el consumo promedio entre 'Llano' y 'Alta Montaña'."
     if c4.button("🔍 Diagnóstico Mensual"):
-        # Extraemos un resumen rápido para la IA
-        resumen_mensual = df_h.groupby('Movil')['Consumo_L100'].mean().to_string()
-        pregunta_rapida = f"Analiza estos consumos de flota y dime si detectas alguna anomalía o móvil con consumo excesivo que requiera mantenimiento urgente: {resumen_mensual}"
-
-    if "messages" not in st.session_state: 
-        st.session_state.messages = []
+        resumen = df_h.groupby('Movil')['Consumo_L100'].mean().to_string()
+        pregunta_rapida = f"Analiza estos consumos: {resumen}. ¿Hay anomalías o mantenimiento urgente?"
 
     # Mostrar historial
+    if "messages" not in st.session_state: st.session_state.messages = []
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]): 
-            st.markdown(message["content"])
+        with st.chat_message(message["role"]): st.markdown(message["content"])
 
-    # Formulario para preguntas personalizadas
+    # Formulario
     with st.form("ai_form", clear_on_submit=True):
-        pregunta_input = st.text_input("¿Qué quieres saber sobre la flota?", key="input_ia")
+        pregunta_input = st.text_input("¿Qué quieres saber?", key="input_ia")
         btn_enviar = st.form_submit_button("Consultar IA")
 
-    # Lógica de procesamiento
     pregunta = pregunta_rapida if pregunta_rapida else pregunta_input
     
     if (btn_enviar or pregunta_rapida) and pregunta and model:
-        st.session_state.messages.append({"role": "user", "content": pregunta})
-        with st.chat_message("user"): 
-            st.markdown(pregunta)
-        
-        with st.chat_message("assistant"):
-            with st.spinner("Generando diagnóstico..."):
-                ctx = "Eres el jefe de flota de 'Flota Jujuy'. Tu rol es ser crítico y analítico con los datos. Si ves consumos altos, recomiéndame revisar inyectores, filtros o verificar el estilo de manejo del chofer."
-                
-                for intento in range(2):
+        # Lógica de CACHÉ: Si ya preguntaste esto, no gastamos cuota
+        if pregunta in st.session_state.ai_cache:
+            respuesta_final = st.session_state.ai_cache[pregunta]
+            st.info("💡 (Respuesta recuperada del historial reciente para ahorrar cuota)")
+        else:
+            # Solo llamamos a la API si no tenemos la respuesta guardada
+            st.session_state.messages.append({"role": "user", "content": pregunta})
+            with st.chat_message("user"): st.markdown(pregunta)
+            
+            with st.chat_message("assistant"):
+                with st.spinner("Analizando..."):
+                    ctx = "Eres jefe de flota. Sé crítico. Si hay consumos altos, recomienda mantenimiento."
                     try:
                         response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
-                        res_text = response.text
-                        st.markdown(res_text)
-                        st.session_state.messages.append({"role": "assistant", "content": res_text})
-                        break 
+                        respuesta_final = response.text
+                        st.session_state.ai_cache[pregunta] = respuesta_final # Guardamos en caché
                     except Exception as e:
-                        if intento == 0: time.sleep(3)
-                        else: st.error("⚠️ Límite de cuota excedido. Intenta nuevamente en un minuto.")
+                        st.error("⚠️ Cuota agotada. Por favor, espera 1 minuto. El sistema está protegido.")
+                        st.stop()
+        
+        # Mostrar respuesta
+        if 'respuesta_final' in locals():
+            st.markdown(respuesta_final)
+            st.session_state.messages.append({"role": "assistant", "content": respuesta_final})
 # --- TAB 4: ANALÍTICA AVANZADA ---
 with tabs[4]:
     st.subheader("📈 Analítica y Diagnóstico")
