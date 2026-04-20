@@ -93,24 +93,36 @@ with tabs[0]:
     with st.container(border=True):
         col_m1, col_m2 = st.columns([1, 2])
         with col_m1:
-            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=36, key="movil_dinamico")
+            movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=35, key="movil_dinamico")
         
+        # --- LÓGICA DE SUGERENCIAS (KM, MARCA Y CHOFER) ---
         km_sugerido = 0.0
-        idx_marca = 0 # Índice por defecto (Scania)
+        idx_marca = 0
+        idx_chofer = 0
         marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
+        
         if not df_h.empty:
             ult_m = df_h[df_h["Movil"] == movil_sel]
             if not ult_m.empty:
+                # Sugerir KM
                 km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
+                
+                # Sugerir Marca
                 marca_hist = ult_m.sort_values("Fecha").iloc[-1]["Marca"]
                 if marca_hist in marcas_disponibles:
                     idx_marca = marcas_disponibles.index(marca_hist)
+                
+                # Sugerir Chofer (NUEVO)
+                chofer_hist = ult_m.sort_values("Fecha").iloc[-1]["Chofer"]
+                if chofer_hist in lista_personal:
+                    idx_chofer = lista_personal.index(chofer_hist)
 
+        # --- FORMULARIO ---
         with st.form("registro_form_v2", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
                 marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True)
-                chofer = st.selectbox("👤 Chofer", options=lista_personal)
+                chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
                 precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
                 fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
             with c2:
