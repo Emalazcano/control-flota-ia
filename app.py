@@ -134,7 +134,8 @@ with tabs[0]:
     idx_marca = 0
     idx_chofer = 0
     marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
-if not df_h.empty and movil_sel := st.session_state.get("movil_dinamico", 1):
+movil_sel = st.session_state.get("movil_dinamico", 1)
+if not df_h.empty and movil_sel:
     ult_m = df_h[df_h["Movil"] == movil_sel]
 if not ult_m.empty:
      km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
