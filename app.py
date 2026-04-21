@@ -444,7 +444,7 @@ st.dataframe(
 df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
     lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
     subset=["Consumo_Promedio"]
-)
+) ,
     use_container_width=True,
     column_config={
         "Traza":            st.column_config.TextColumn("Traza"),
