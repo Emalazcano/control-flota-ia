@@ -123,27 +123,24 @@ def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
         
-        # Agregamos aquí todas las columnas que quieres ver como números enteros
-        cols_int = [
-            "Movil", "KM_Ini", "KM_Fin", "KM_Recorr", 
-            "L_Ralenti", "L_Ticket", "L_Tablero", "Desvio_Neto"
-        ]
+        # 1. Definimos las columnas que queremos como números enteros (sin decimales)
+        cols_int = ["Movil", "KM_Ini", "KM_Fin", "KM_Recorr", "L_Ralenti", "L_Ticket", "L_Tablero", "Desvio_Neto"]
         
-        # Columnas que sí deben tener decimales (ej. consumos y costos)
+        # 2. Definimos las columnas que deben conservar decimales
         cols_float = ["Consumo_L100", "Costo_Total_ARS", "Costo_Ralenti_ARS"]
         
+        # 3. Aplicamos el formato de enteros
         for col in cols_int:
             if col in df.columns:
-                # Convertimos, rellenamos con 0 y forzamos a entero
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
+        # 4. Aplicamos el formato de flotantes
         for col in cols_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
+                
+        # 5. Tratamiento de Fechas (sin sobrescribir con la fecha actual)
         if 'Fecha' in df.columns:
-            # CORRECCIÓN: Quitamos el fillna(pd.Timestamp.today())
-            # Convertimos a fecha, si no se puede, que quede como nulo (NaT)
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
             
         return df
