@@ -144,18 +144,18 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # 5. Tratamiento de Fechas (Asegurando el formato correcto)
-        try:
-            if 'Fecha' in df.columns:
-            # Esta línea debe estar más adentro que el 'if'
-                df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+# 5. Tratamiento de Fechas (Asegurando el formato correcto)
+    try:
+        if 'Fecha' in df.columns:
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         
-            return df
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
+        df = pd.DataFrame() # Creamos un DF vacío si falla
 
-        except Exception as e:
-            st.error(f"Error al cargar datos: {e}")
-            return pd.DataFrame()
-            
+    return df
+
+# Esta línea debe ir pegada al margen izquierdo (sin espacios antes de 'def')
 def guardar_historial(df_nuevo):
     """Convierte fechas a texto antes de escribir para evitar el 0:00:00."""
     df_save = df_nuevo.copy()
