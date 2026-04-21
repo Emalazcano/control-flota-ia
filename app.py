@@ -128,59 +128,50 @@ tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial", "�
 # --- TAB 0: REGISTRO ---
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
-
-    # Pre-cálculos (indentados a 4 espacios)
-    km_sugerido = 0.0
-    idx_marca = 0
-    idx_chofer = 0
-    marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
-
-    # Lógica de asignación (indentada a 4 espacios)
-    movil_sel = st.session_state.get("movil_dinamico", 1)
     
-    # Condicional (indentada a 4 espacios)
-    if not df_h.empty and movil_sel:
-        ult_m = df_h[df_h["Movil"] == movil_sel]
-        if not ult_m.empty:
-            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
-            marca_hist = ult_m.sort_values("Fecha").iloc[-1]["Marca"]
-            if marca_hist in marcas_disponibles: 
-                idx_marca = marcas_disponibles.index(marca_hist)
-            chofer_hist = ult_m.sort_values("Fecha").iloc[-1]["Chofer"]
-            if chofer_hist in lista_personal: 
-                idx_chofer = lista_personal.index(chofer_hist)
-
-    # FORMULARIO (Indentado exactamente a 4 espacios para quedar dentro de tabs[0])
-    with st.form("registro_form_v2", clear_on_submit=True):
-        col_m1, col_m2 = st.columns([1, 2])
-        with col_m1:
-            movil_sel_input = st.selectbox("🔢 Móvil", list(range(1, 101)), index=34, key="movil_dinamico")
-            
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True)
-            chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
-            precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
-            fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
-        with c2:
-            ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            
-            if not df_h.empty and "Traza" in df_h.columns:
-                lista_limpia = df_h["Traza"].dropna().astype(str).unique().tolist()
-                traza_ex = ["➕ NUEVA"] + sorted(lista_limpia)
-            else:
-                traza_ex = ["➕ NUEVA"]
-            
-            traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
-        with c3:
-            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
-            kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
-            lt = st.number_input("⛽ Litros Ticket", value=0.0)
-            ltab = st.number_input("📟 Litros Tablero", value=0.0)
-            lral = st.number_input("⏳ Litros Ralentí", value=0.0)
+    with st.container(border=True):
+        # 1. Selector (El gatillo que dispara el cambio)
+        movil_sel = st.selectbox("🔢 Móvil", list(range(1, 101)), index=35, key="movil_dinamico")
         
-        submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+        # 2. Lógica de cálculo (Se ejecuta al cambiar el selector de arriba)
+        km_sugerido = 0.0
+        idx_marca = 0
+        idx_chofer = 0
+        marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
+        
+        if not df_h.empty:
+            # Filtramos datos
+            ult_m = df_h[df_h["Movil"] == movil_sel]
+            if not ult_m.empty:
+                # Obtenemos valores históricos
+                ultimo_reg = ult_m.sort_values("Fecha").iloc[-1]
+                km_sugerido = float(ultimo_reg["KM_Fin"])
+                
+                # Buscamos índices
+                if ultimo_reg["Marca"] in marcas_disponibles:
+                    idx_marca = marcas_disponibles.index(ultimo_reg["Marca"])
+                if ultimo_reg["Chofer"] in lista_personal:
+                    idx_chofer = lista_personal.index(ultimo_reg["Chofer"])
+
+        # 3. FORMULARIO
+        # IMPORTANTE: No usamos 'index' fijo aquí si queremos que sea dinámico
+        # Usamos una key única para el formulario o para los widgets si es necesario refrescarlos
+        with st.form("registro_form_v2", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                # Usamos el idx_marca calculado arriba
+                marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True)
+                chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
+                precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
+                fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
+            with c2:
+                ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
+                # ... (resto de tu código de trazas igual)
+            with c3:
+                kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
+                # ... (resto de tus campos)
+            
+            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
 # --- TAB 1: OJO DE HALCÓN ---
 with tabs[1]:
