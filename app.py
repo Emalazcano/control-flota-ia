@@ -122,19 +122,17 @@ def cargar_lista_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero",
-                    "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
+        
         if 'Fecha' in df.columns:
-            # Extraemos solo DD/MM/YYYY para ignorar horas que Sheets pueda agregar
-            df['Fecha'] = df['Fecha'].astype(str).str.extract(r'(\d{2}/\d{2}/\d{4})')[0]
-            df['Fecha'] = pd.to_datetime(df['Fecha'], format='%d/%m/%Y', errors='coerce')
-            df['Fecha'] = df['Fecha'].dt.normalize()
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
-
+            # CORRECCIÓN: Quitamos el fillna(pd.Timestamp.today())
+            # Convertimos a fecha, si no se puede, que quede como nulo (NaT)
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            
         return df
     except Exception as e:
         st.error(f"Error al cargar datos: {e}")
