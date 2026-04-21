@@ -146,7 +146,7 @@ def cargar_historial():
                 
         # 5. Tratamiento de Fechas (sin sobrescribir con la fecha actual)
         if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            df['Fecha'] = pd.to_datetime(df['Fecha'], 
             
         return df
     except Exception as e:
@@ -156,7 +156,7 @@ def cargar_historial():
 def guardar_historial(df_nuevo):
     """Convierte fechas a texto antes de escribir para evitar el 0:00:00."""
     df_save = df_nuevo.copy()
-    df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], errors='coerce').dt.strftime('%d/%m/%Y')
+    df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], errors='coerce').dt.strftime('%Y-%m-%d')
     conn.update(spreadsheet=URL, data=df_save)
 
 # ─────────────────────────────────────────────
