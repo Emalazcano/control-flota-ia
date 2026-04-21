@@ -314,17 +314,39 @@ with tabs[4]:
     df_ana['Mes'] = df_ana['Fecha'].dt.to_period('M').astype(str)
 
     # 1. TENDENCIAS (Detectar desgaste mecánico)
-    st.markdown("### 📉 Tendencia de Consumo (Detectar Desgaste)")
-    st.write("Visualiza la evolución del consumo de cada móvil mes a mes.")
+    st.markdown("### 📉 Tendencia de Consumo vs. Promedio Flota")
     
-    moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", options=sorted(df_ana['Movil'].unique()), default=[df_ana['Movil'].iloc[0]])
-    df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
-    df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
-    
-    fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", markers=True, template="plotly_dark")
-    st.plotly_chart(fig_line, use_container_width=True)
+    # Calcular promedio general de la flota por mes para tener una referencia
+    df_promedio_flota = df_ana.groupby('Mes')['Consumo_L100'].mean().reset_index()
+    df_promedio_flota.rename(columns={'Consumo_L100': 'Promedio_Flota'}, inplace=True)
 
-    st.divider()
+    moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", 
+                                          options=sorted(df_ana['Movil'].unique()), 
+                                          default=[df_ana['Movil'].iloc[0]])
+    
+    if moviles_seleccionados:
+        df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
+        df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
+        
+        # Crear gráfico base
+        fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", 
+                           markers=True, template="plotly_dark",
+                           labels={"Consumo_L100": "Consumo (L/100km)", "Mes": "Periodo"})
+        
+        # Añadir la línea de promedio de la flota (punteada y gris)
+        fig_line.add_scatter(x=df_promedio_flota['Mes'], y=df_promedio_flota['Promedio_Flota'],
+                             mode='lines', name='Promedio Flota',
+                             line=dict(color='white', width=2, dash='dash'),
+                             hovertemplate="Promedio Flota: %{y:.1f} L/100")
+        
+        # Mejorar aspecto visual
+        fig_line.update_layout(hovermode="x unified", legend_title="Unidad")
+        
+        st.plotly_chart(fig_line, use_container_width=True)
+        
+        st.info("💡 **Cómo leer esto:** La línea punteada blanca representa el promedio de toda tu flota. Si la línea de tu móvil está **arriba** de la blanca, está consumiendo más que el promedio. Si está **abajo**, es más eficiente.")
+    else:
+        st.warning("Selecciona al menos un móvil para ver la tendencia.")
 
     # 2. BENCHMARK (Marca/Modelo vs Ruta)
     st.markdown("### ⚖️ Benchmark: Marca vs Ruta")
