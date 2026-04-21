@@ -156,7 +156,7 @@ def cargar_historial():
             st.error(f"Error al cargar datos: {e}")
             return pd.DataFrame()
 
-    def guardar_historial(df_nuevo):
+ def guardar_historial(df_nuevo):
         """Convierte fechas a texto antes de escribir para evitar el 0:00:00."""
         df_save = df_nuevo.copy()
         df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], errors='coerce').dt.strftime('%Y-%m-%d')
