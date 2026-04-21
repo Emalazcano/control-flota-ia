@@ -110,9 +110,9 @@ def cargar_historial():
         
         # --- CORRECCIÓN AQUÍ ---
         if 'Fecha' in df.columns:
-    df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-    df['Fecha'] = df['Fecha'].dt.normalize()  # elimina la hora
-    df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
+        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+        df['Fecha'] = df['Fecha'].dt.normalize()  # elimina la hora
+        df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
             
         return df
     except Exception as e:
