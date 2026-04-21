@@ -62,7 +62,6 @@ st.markdown("""
 # 2. CONFIGURACIÓN IA GEMINI
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
-import osimport google.generativeai as genai
     genai.configure(api_key="TU_API_KEY")
 for m in genai.list_models():
     if 'generateContent' in m.supported_generation_methods:
