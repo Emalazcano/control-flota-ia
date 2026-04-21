@@ -122,9 +122,19 @@ def cargar_lista_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         
-        for col in num_cols:
+        # 1. Definimos qué columnas deben ser enteras y cuáles flotantes
+        cols_int = ["Movil", "L_Ralenti", "L_Ticket", "KM_Ini", "KM_Fin", "KM_Recorr"]
+        cols_float = ["Consumo_L100", "Costo_Total_ARS", "Desvio_Neto", "L_Tablero"]
+        
+        # 2. Procesamos columnas enteras
+        for col in cols_int:
+            if col in df.columns:
+                # Convertimos a numérico, rellenamos con 0, y forzamos a entero (int)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+        
+        # 3. Procesamos columnas flotantes (para que mantengan sus decimales)
+        for col in cols_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
