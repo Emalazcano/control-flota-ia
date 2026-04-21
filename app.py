@@ -146,7 +146,7 @@ def cargar_historial():
 def guardar_historial(df_nuevo):
     """Convierte fechas a texto antes de escribir para evitar el 0:00:00."""
     df_save = df_nuevo.copy()
-    df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], errors='coerce').dt.strftime('%Y-%m-%d')
+    df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
     conn.update(spreadsheet=URL, data=df_save)
 
 # ─────────────────────────────────────────────
