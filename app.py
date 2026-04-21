@@ -107,8 +107,14 @@ def cargar_historial():
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # --- CORRECCIÓN AQUÍ ---
         if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce').fillna(pd.Timestamp.now())
+            # Convertimos a datetime, extraemos solo la parte de la fecha (.dt.date)
+            # y rellenamos nulos solo con la fecha de hoy sin hora
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce').dt.date
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().date())
+            
         return df
     except Exception as e:
         st.error(f"Error al cargar datos: {e}")
