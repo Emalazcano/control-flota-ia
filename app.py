@@ -216,6 +216,7 @@ with tabs[0]:
 with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
+        df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'])
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
