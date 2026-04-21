@@ -145,11 +145,11 @@ def cargar_historial():
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 
   # 5. Tratamiento de Fechas (Asegurando el formato correcto)
-try:
-    if 'Fecha' in df.columns:
-        df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+    try:
+        if 'Fecha' in df.columns:
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
     
-    return df
+        return df
 
 except Exception as e:
     st.error(f"Error al cargar datos: {e}")
