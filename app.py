@@ -19,11 +19,6 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import tempfile
 import os
-import google.generativeai as genai
-genai.configure(api_key="TU_API_KEY")
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        print(m.name)
 
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DE PÁGINA
