@@ -336,20 +336,7 @@ with TAB_HALCON:
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
-
-        # Alertas automáticas — consumo sobre umbral
-        alertas = df_filtrado[df_filtrado['Consumo_L100'] > UMBRAL]
-        if not alertas.empty:
-            st.markdown(f"### 🚨 Alertas de consumo alto (> {UMBRAL:.0f} L/100km)")
-            for _, row in alertas.iterrows():
-                st.markdown(
-                    f'<div class="alert-banner">🚨 <b>{row["Chofer"]}</b> — '
-                    f'Móvil {int(row["Movil"])} — {row["Consumo_L100"]:.1f} L/100km '
-                    f'el {pd.Timestamp(row["Fecha"]).strftime("%d/%m/%Y")}</div>',
-                    unsafe_allow_html=True
-                )
-            st.divider()
-
+        
         csv = df_filtrado.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar reporte filtrado (CSV)", csv, 'reporte_flota.csv', 'text/csv')
 
