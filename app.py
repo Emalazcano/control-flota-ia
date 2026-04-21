@@ -110,8 +110,9 @@ def cargar_historial():
         
         # --- CORRECCIÓN AQUÍ ---
         if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today())
+    df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+    df['Fecha'] = df['Fecha'].dt.normalize()  # elimina la hora
+    df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
             
         return df
     except Exception as e:
@@ -207,6 +208,8 @@ with tabs[0]:
         }
         
         df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+        df_final['Fecha'] = pd.to_datetime(df_final['Fecha'], dayfirst=True, errors='coerce')
+        df_final['Fecha'] = df_final['Fecha'].dt.strftime('%d/%m/%Y')
         conn.update(spreadsheet=URL, data=df_final)
         st.success("✅ Guardado."); time.sleep(1); st.rerun()
 
