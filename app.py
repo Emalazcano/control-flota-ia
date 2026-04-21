@@ -62,7 +62,7 @@ st.markdown("""
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"].strip().strip('"'))
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 else:
     st.warning("⚠️ Clave API de Gemini no detectada en Secrets.")
     model = None
