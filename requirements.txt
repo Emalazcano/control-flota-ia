@@ -7,3 +7,5 @@ st-gsheets-connection
 fpdf2
 google-generativeai==0.5.2
 setuptools
+reportlab
+matplotlib
