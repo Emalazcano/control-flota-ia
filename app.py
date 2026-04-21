@@ -62,10 +62,14 @@ st.markdown("""
 # 2. CONFIGURACIÓN IA GEMINI
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
-    genai.configure(api_key="TU_API_KEY")
-    for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        print(m.name)
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+else:
+    st.error("⚠️ Configura tu GOOGLE_API_KEY en los secretos de Streamlit.")
+@st.cache_data(show_spinner=True)
+def consultar_ia(prompt):
+    model = genai.GenerativeModel('gemini-2.0-flash')
+    response = model.generate_content(prompt)
+    return response.text    
 
 # ─────────────────────────────────────────────
 # 3. USUARIOS Y LOGIN
