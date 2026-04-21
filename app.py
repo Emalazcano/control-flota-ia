@@ -416,15 +416,15 @@ with TAB_HIST:
             except:
                 return ''
 
-        st.dataframe(
-            df_v.style.map(colorear_consumo, subset=['Consumo_L100'])
-            use_container_width=True,
-            column_config={
-                "KM_Ini":    st.column_config.NumberColumn("KM Inicial",   format="%d"),
-                "KM_Fin":    st.column_config.NumberColumn("KM Final",     format="%d"),
-                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
-            }
-        )
+    st.dataframe(
+    df_v.style.map(colorear_consumo, subset=['Consumo_L100']),  # <-- ¡AQUÍ FALTABA LA COMA!
+    use_container_width=True,
+    column_config={
+        "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
+        "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
+        "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
+    }
+)
 
 # ─────────────────────────────────────────────
 # TAB: ASISTENTE IA
