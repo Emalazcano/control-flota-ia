@@ -67,7 +67,7 @@ else:
     st.error("⚠️ Configura tu GOOGLE_API_KEY en los secretos de Streamlit.")
 @st.cache_data(show_spinner=True)
 def consultar_ia(prompt):
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash-lite')
     response = model.generate_content(prompt)
     return response.text    
 
