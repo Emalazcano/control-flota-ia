@@ -145,7 +145,7 @@ def cargar_historial():
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                 
         # 5. Tratamiento de Fechas (Asegurando el formato correcto)
-if 'Fecha' in df.columns:
+    if 'Fecha' in df.columns:
     # Usamos pd.to_datetime con el cierre de paréntesis correcto
     df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce') 
             
