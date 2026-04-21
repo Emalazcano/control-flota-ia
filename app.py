@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import tempfile
 import os
-import google.generativeai as genai
 
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DE PÁGINA
@@ -33,7 +32,6 @@ st.markdown("""
     [data-testid="stMetricValue"] { font-size: 20px !important; }
     div.stButton > button { width: 100%; height: 50px; font-size: 16px; }
     .stForm { padding: 10px !important; }
-    /* En móvil, forzar columnas a apilarse */
     [data-testid="column"] { min-width: 100% !important; }
 }
 .metric-card {
@@ -50,7 +48,7 @@ st.markdown("""
 }
 .desvio-item:hover { transform: scale(1.02); }
 .desvio-critico { background: #421212 !important; border: 1px solid #FF4B4B !important; }
-.desvio-ok     { background: #0c2b18 !important; border: 1px solid #00CC96 !important; }
+.desvio-ok      { background: #0c2b18 !important; border: 1px solid #00CC96 !important; }
 .alert-banner {
     background: #421212; border: 1px solid #FF4B4B; border-radius: 10px;
     padding: 14px 18px; margin-bottom: 10px; color: white; font-size: 15px;
@@ -66,6 +64,7 @@ if "GOOGLE_API_KEY" in st.secrets:
     model = genai.GenerativeModel('gemini-2.0-flash-lite')
 else:
     st.error("⚠️ Configura tu GOOGLE_API_KEY en los secretos de Streamlit.")
+
 @st.cache_data(show_spinner=True)
 def consultar_ia(prompt):
     model = genai.GenerativeModel('gemini-2.0-flash-lite')
@@ -75,8 +74,6 @@ def consultar_ia(prompt):
 # ─────────────────────────────────────────────
 # 3. USUARIOS Y LOGIN
 # ─────────────────────────────────────────────
-# Definición de usuarios: { usuario: { "pass": "...", "rol": "admin|visualizador" } }
-# Se recomienda moverlos a st.secrets en producción.
 USUARIOS = {
     "ema_admin":    {"pass": "jujuy2024",  "rol": "admin"},
     "visualizador": {"pass": "ver2024",    "rol": "visualizador"},
@@ -109,7 +106,6 @@ URL  = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6L
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
-# Umbral configurable (se puede cambiar en sidebar)
 if "umbral_consumo" not in st.session_state:
     st.session_state["umbral_consumo"] = 35.0
 
@@ -127,35 +123,26 @@ def cargar_lista_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        
-        # 1. Definimos las columnas que queremos como números enteros (sin decimales)
         cols_int = ["Movil", "KM_Ini", "KM_Fin", "KM_Recorr", "L_Ralenti", "L_Ticket", "L_Tablero", "Desvio_Neto"]
-        
-        # 2. Definimos las columnas que deben conservar decimales
         cols_float = ["Consumo_L100", "Costo_Total_ARS", "Costo_Ralenti_ARS"]
         
-        # 3. Aplicamos el formato de enteros
         for col in cols_int:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
-        # 4. Aplicamos el formato de flotantes
         for col in cols_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-# 5. Tratamiento de Fechas (Asegurando el formato correcto)
-    try:
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-        
+            
     except Exception as e:
         st.error(f"Error al cargar datos: {e}")
-        df = pd.DataFrame() # Creamos un DF vacío si falla
+        df = pd.DataFrame() 
 
     return df
 
-# Esta línea debe ir pegada al margen izquierdo (sin espacios antes de 'def')
 def guardar_historial(df_nuevo):
     """Convierte fechas a texto antes de escribir para evitar el 0:00:00."""
     df_save = df_nuevo.copy()
@@ -205,7 +192,6 @@ UMBRAL = st.session_state["umbral_consumo"]
 # ─────────────────────────────────────────────
 st.title("🚚 Inteligencia de Flota y Costos")
 
-# El admin ve todas las tabs; el visualizador no puede registrar
 if ROL == "admin":
     tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial",
                     "🤖 Asistente IA", "📈 Analítica", "💰 Costos", "📄 Reporte PDF"])
@@ -222,16 +208,15 @@ else:
 if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
-
+        # ... [resto de tu código de registro] ...
+        # (He mantenido el cuerpo de registro original)
         col_m1, _ = st.columns([1, 2])
         movil_sel = col_m1.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
         precio_comb = st.session_state["precio_gasoil"]
-
         km_sugerido = 0.0
         idx_marca   = 0
         idx_chofer  = 0
         marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
-
         if not df_h.empty:
             hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
             if not hist_movil.empty:
@@ -266,60 +251,44 @@ if TAB_REG:
 
             dist_v = int(kmf - kmi) if kmf > kmi else 0
             cons_v = (lt / dist_v * 100) if dist_v > 0 else 0.0
-
             st.markdown("---")
             v1, v2, v3, v4 = st.columns(4)
-            v1.metric("📏 KM",      f"{dist_v:,}")
+            v1.metric("📏 KM",     f"{dist_v:,}")
             v2.metric("🔢 Cons",    f"{cons_v:.1f} L/100")
             v3.metric("💰 Costo",   f"${(lt * precio_comb):,.0f}")
             v4.metric("🚨 Desvío",  f"{(lt - (ltab + lral)):.1f}")
-
-            # Alerta visual si el consumo ya supera el umbral
             if cons_v > UMBRAL:
-                st.markdown(
-                    f'<div class="alert-banner">🚨 <b>ALERTA:</b> El consumo calculado '
-                    f'({cons_v:.1f} L/100km) supera el umbral configurado ({UMBRAL:.0f} L/100km).</div>',
-                    unsafe_allow_html=True
-                )
-
+                st.markdown(f'<div class="alert-banner">🚨 <b>ALERTA:</b> El consumo calculado ({cons_v:.1f} L/100km) supera el umbral configurado ({UMBRAL:.0f} L/100km).</div>', unsafe_allow_html=True)
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit_button:
-            if kmf <= kmi:
-                st.error("⚠️ El KM Final debe ser mayor al Inicial.")
-            elif lt <= 0:
-                st.error("⚠️ Los litros deben ser mayores a 0.")
-            elif not t_final:
-                st.error("⚠️ Ingresá un nombre de traza.")
+            if kmf <= kmi: st.error("⚠️ El KM Final debe ser mayor al Inicial.")
+            elif lt <= 0: st.error("⚠️ Los litros deben ser mayores a 0.")
+            elif not t_final: st.error("⚠️ Ingresá un nombre de traza.")
             else:
                 dist_final = int(kmf - kmi)
                 cons_final = round(lt / dist_final * 100, 2) if dist_final > 0 else 0
                 nuevo_reg  = {
-                    "Fecha":          fecha_input.strftime('%d/%m/%Y'),
-                    "Chofer":         chofer,
-                    "Movil":          movil_sel,
-                    "Marca":          marca,
-                    "Ruta":           ruta_tipo,
-                    "Traza":          t_final,
-                    "KM_Ini":         kmi,
-                    "KM_Fin":         kmf,
-                    "KM_Recorr":      dist_final,
-                    "L_Ticket":       lt,
-                    "L_Tablero":      ltab,
-                    "L_Ralenti":      lral,
-                    "Consumo_L100":   cons_final,
+                    "Fecha":         fecha_input.strftime('%d/%m/%Y'),
+                    "Chofer":        chofer,
+                    "Movil":         movil_sel,
+                    "Marca":         marca,
+                    "Ruta":          ruta_tipo,
+                    "Traza":         t_final,
+                    "KM_Ini":        kmi,
+                    "KM_Fin":        kmf,
+                    "KM_Recorr":     dist_final,
+                    "L_Ticket":      lt,
+                    "L_Tablero":     ltab,
+                    "L_Ralenti":     lral,
+                    "Consumo_L100":  cons_final,
                     "Costo_Total_ARS": round(lt * precio_comb, 2),
-                    "Desvio_Neto":    round(lt - (ltab + lral), 2),
+                    "Desvio_Neto":   round(lt - (ltab + lral), 2),
                 }
                 df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 guardar_historial(df_final)
-
-                # Alerta post-guardado si el consumo es alto
                 if cons_final > UMBRAL:
-                    st.warning(
-                        f"⚠️ Registro guardado, pero el consumo ({cons_final} L/100km) "
-                        f"supera el umbral de {UMBRAL:.0f} L/100km. Revisá el vehículo."
-                    )
+                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final} L/100km) supera el umbral de {UMBRAL:.0f} L/100km. Revisá el vehículo.")
                 else:
                     st.success("✅ Registro guardado correctamente.")
                 time.sleep(1)
@@ -335,19 +304,16 @@ with TAB_HALCON:
         df_ana = df_h.copy()
         df_ana['Fecha']   = pd.to_datetime(df_ana['Fecha'])
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
-
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel  = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=list(df_ana['Ruta'].unique()))
-
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
         
         csv = df_filtrado.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar reporte filtrado (CSV)", csv, 'reporte_flota.csv', 'text/csv')
-
         st.divider()
         st.subheader("🏆 Ranking de Eficiencia (Top 5)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
@@ -355,112 +321,67 @@ with TAB_HALCON:
         medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
             with cols_m[i]:
-                st.markdown(
-                    f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div>'
-                    f'<div class="driver-name">{row["Chofer"]}</div>'
-                    f'<div class="driver-score">{row["Consumo_L100"]:.1f}</div>'
-                    f'<div style="color:#aab;font-size:12px;">L/100</div></div>',
-                    unsafe_allow_html=True
-                )
-
+                st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
         st.divider()
         st.subheader("⚠️ Ranking de Desvíos Críticos por Chofer (>50L)")
-        df_desv = (df_filtrado.groupby("Chofer")["Desvio_Neto"].sum()
-                   .reset_index().pipe(lambda d: d[d['Desvio_Neto'] > 50])
-                   .sort_values("Desvio_Neto", ascending=False))
-        if df_desv.empty:
-            st.info("✅ No hay desvíos críticos.")
+        df_desv = (df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index().pipe(lambda d: d[d['Desvio_Neto'] > 50]).sort_values("Desvio_Neto", ascending=False))
+        if df_desv.empty: st.info("✅ No hay desvíos críticos.")
         else:
             for _, row in df_desv.iterrows():
-                st.markdown(
-                    f'<div class="desvio-item desvio-critico">'
-                    f'<div><b>{row["Chofer"]}</b><br><small>🚨 Crítico (>50L)</small></div>'
-                    f'<b>{row["Desvio_Neto"]:.1f} L</b></div>',
-                    unsafe_allow_html=True
-                )
-
+                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>{row["Chofer"]}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
         st.divider()
         st.subheader("📊 Desvíos Críticos por Unidad (>50L)")
-        df_movil = (df_filtrado.groupby("Movil")["Desvio_Neto"].sum()
-                    .reset_index().pipe(lambda d: d[d['Desvio_Neto'] > 50])
-                    .sort_values("Desvio_Neto", ascending=False))
-        if df_movil.empty:
-            st.info("✅ No hay desvíos críticos por unidad.")
+        df_movil = (df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index().pipe(lambda d: d[d['Desvio_Neto'] > 50]).sort_values("Desvio_Neto", ascending=False))
+        if df_movil.empty: st.info("✅ No hay desvíos críticos por unidad.")
         else:
             for _, row in df_movil.iterrows():
-                st.markdown(
-                    f'<div class="desvio-item desvio-critico">'
-                    f'<div><b>Unidad Nº {int(row["Movil"])}</b><br><small>🚨 Crítico (>50L)</small></div>'
-                    f'<b>{row["Desvio_Neto"]:.1f} L</b></div>',
-                    unsafe_allow_html=True
-                )
-
+                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>Unidad Nº {int(row["Movil"])}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
         st.divider()
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
         df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
-        fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca",
-                          barmode="group", text_auto='.1f', template="plotly_dark")
-        st.plotly_chart(fig_comp, use_container_width=True
-                )
-        st.divider()
-st.subheader("🗺️ Consumo Promedio por Traza")
-
-# Pre-cálculo del dataframe (tu lógica original es correcta)
-df_traza = (
-    df_filtrado.groupby("Traza")
-    .agg(
-        Consumo_Promedio=("Consumo_L100", "mean"),
-        Viajes=("Fecha", "count"),
-        KM_Totales=("KM_Recorr", "sum"),
-        Litros_Totales=("L_Ticket", "sum"),
-    )
-    .reset_index()
-    .sort_values("Consumo_Promedio", ascending=True)
-)
-
-# Tarjetas: Diseño Ejecutivo
-cols = st.columns(4)
-
-for i, (_, row) in enumerate(df_traza.iterrows()):
-    # Usamos el operador módulo para distribuir en 4 columnas
-    with cols[i % 4]:
-        # Determinar el estado visual
-        is_alert = row["Consumo_Promedio"] > UMBRAL
+        fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
+        st.plotly_chart(fig_comp, use_container_width=True)
         
-        with st.container(border=True):
-            st.metric(
-                label=row["Traza"], 
-                value=f"{row['Consumo_Promedio']:.1f} L/100km",
-                delta="🚨 Supera límite" if is_alert else "✅ Eficiente",
-                delta_color="inverse" if is_alert else "normal"
+        # --- AQUÍ ESTÁ EL BLOQUE MOVIDO (SOLO APARECERÁ EN OJO DE HALCÓN) ---
+        st.divider()
+        st.subheader("🗺️ Consumo Promedio por Traza")
+        df_traza = (
+            df_filtrado.groupby("Traza")
+            .agg(
+                Consumo_Promedio=("Consumo_L100", "mean"),
+                Viajes=("Fecha", "count"),
+                KM_Totales=("KM_Recorr", "sum"),
+                Litros_Totales=("L_Ticket", "sum"),
             )
-            
-            # Barra de progreso: Normalizada. 
-            # Ajusta el divisor (60) según el consumo máximo esperado en tu flota
-            progreso = min(row["Consumo_Promedio"] / 60, 1.0)
-            st.progress(progreso)
-            
-            st.caption(f"{int(row['Viajes'])} viajes · {int(row['KM_Totales']):,} km")
+            .reset_index()
+            .sort_values("Consumo_Promedio", ascending=True)
+        )
+        cols = st.columns(4)
+        for i, (_, row) in enumerate(df_traza.iterrows()):
+            with cols[i % 4]:
+                is_alert = row["Consumo_Promedio"] > UMBRAL
+                with st.container(border=True):
+                    st.metric(label=row["Traza"], value=f"{row['Consumo_Promedio']:.1f} L/100km", delta="🚨 Supera límite" if is_alert else "✅ Eficiente", delta_color="inverse" if is_alert else "normal")
+                    progreso = min(row["Consumo_Promedio"] / 60, 1.0)
+                    st.progress(progreso)
+                    st.caption(f"{int(row['Viajes'])} viajes · {int(row['KM_Totales']):,} km")
+        st.markdown("---")
+        st.markdown("#### 📊 Detalle por traza")
+        st.dataframe(
+            df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
+                lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
+                subset=["Consumo_Promedio"]
+            ),
+            use_container_width=True,
+            column_config={
+                "Traza": st.column_config.TextColumn("Traza"),
+                "Consumo_Promedio": st.column_config.NumberColumn("L/100km", format="%.2f"),
+                "Viajes": st.column_config.NumberColumn("Viajes", format="%d"),
+                "KM_Totales": st.column_config.NumberColumn("KM Total", format="%d"),
+                "Litros_Totales": st.column_config.NumberColumn("Litros", format="%.1f"),
+            }
+        )
 
-# Tabla resumen
-st.markdown("---")
-st.markdown("#### 📊 Detalle por traza")
-
-# Usamos .map (compatible con Pandas nuevo) y formateo limpio
-st.dataframe(
-    df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
-        lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
-        subset=["Consumo_Promedio"]
-    ),
-    use_container_width=True,
-    column_config={
-        "Traza": st.column_config.TextColumn("Traza"),
-        "Consumo_Promedio": st.column_config.NumberColumn("L/100km", format="%.2f"),
-        "Viajes": st.column_config.NumberColumn("Viajes", format="%d"),
-        "KM_Totales": st.column_config.NumberColumn("KM Total", format="%d"),
-        "Litros_Totales": st.column_config.NumberColumn("Litros", format="%.1f"),
-    }
-)
 # ─────────────────────────────────────────────
 # TAB: HISTORIAL
 # ─────────────────────────────────────────────
@@ -470,34 +391,27 @@ with TAB_HIST:
     else:
         df_v = df_h.copy().sort_values("Fecha", ascending=False)
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-
-        # Resaltar consumos altos
         def colorear_consumo(val):
-            try:
-                return 'background-color: #421212; color: white' if float(val) > UMBRAL else ''
-            except:
-                return ''
+            try: return 'background-color: #421212; color: white' if float(val) > UMBRAL else ''
+            except: return ''
+        st.dataframe(
+            df_v.style.map(colorear_consumo, subset=['Consumo_L100']),
+            use_container_width=True,
+            column_config={
+                "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
+                "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
+                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
+                "L_Ralenti": st.column_config.NumberColumn("L_Ralenti", format="%d"),
+                "L_Ticket": st.column_config.NumberColumn("L_Ticket", format="%d"),
+                "L_Tablero": st.column_config.NumberColumn("L_Tablero", format="%d"),
+                "Desvio_Neto": st.column_config.NumberColumn("Desvío Neto", format="%d"),
+                "Consumo_L100": st.column_config.NumberColumn("Consumo L/100", format="%.2f"),
+                "Costo_Total_ARS": st.column_config.NumberColumn("Costo Total", format="$%.2f"),
+                "Costo_Ralenti_ARS": st.column_config.NumberColumn("Costo Ralenti", format="$%.2f"),
+            }
+        )
 
-    st.dataframe(
-    df_v.style.map(colorear_consumo, subset=['Consumo_L100']),
-    use_container_width=True,
-    column_config={
-        # Números enteros (sin decimales)
-        "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
-        "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
-        "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
-        "L_Ralenti": st.column_config.NumberColumn("L_Ralenti", format="%d"),
-        "L_Ticket": st.column_config.NumberColumn("L_Ticket", format="%d"),
-        "L_Tablero": st.column_config.NumberColumn("L_Tablero", format="%d"),
-        "Desvio_Neto": st.column_config.NumberColumn("Desvío Neto", format="%d"),
-        
-        # Números con decimales (formato de consumo y dinero)
-        "Consumo_L100": st.column_config.NumberColumn("Consumo L/100", format="%.2f"),
-        "Costo_Total_ARS": st.column_config.NumberColumn("Costo Total", format="$%.2f"),
-        "Costo_Ralenti_ARS": st.column_config.NumberColumn("Costo Ralenti", format="$%.2f"),
-    }
-)
-
+# ... (resto de tus tabs siguen aquí igual, el código cortado por el límite de caracteres debe copiarse desde tu original)
 # ─────────────────────────────────────────────
 # TAB: ASISTENTE IA
 # ─────────────────────────────────────────────
