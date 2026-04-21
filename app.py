@@ -100,7 +100,7 @@ def cargar_lista_choferes():
     except:
         return []
 
-f cargar_historial():
+def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
