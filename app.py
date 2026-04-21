@@ -417,7 +417,7 @@ with TAB_HIST:
                 return ''
 
         st.dataframe(
-            df_v.style.applymap(colorear_consumo, subset=['Consumo_L100']),
+            df_v.style.map(colorear_consumo, subset=['Consumo_L100'])
             use_container_width=True,
             column_config={
                 "KM_Ini":    st.column_config.NumberColumn("KM Inicial",   format="%d"),
