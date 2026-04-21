@@ -455,22 +455,6 @@ df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
     }
 )
 
-# Tabla resumen
-st.dataframe(
-    df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
-        lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '', 
-        subset=["Consumo_Promedio"]
-    ),
-    use_container_width=True,
-    column_config={
-        "Traza": st.column_config.TextColumn("Traza"),
-        "Consumo_Promedio": st.column_config.NumberColumn("L/100km", format="%.2f"),
-        "Viajes": st.column_config.NumberColumn("Viajes", format="%d"),
-        "KM_Totales": st.column_config.NumberColumn("KM Total", format="%d"),
-        "Litros_Totales": st.column_config.NumberColumn("Litros", format="%.1f"),
-    }
-)
-
 # ─────────────────────────────────────────────
 # TAB: HISTORIAL
 # ─────────────────────────────────────────────
