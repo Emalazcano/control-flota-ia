@@ -134,14 +134,14 @@ with tabs[0]:
     idx_marca = 0
     idx_chofer = 0
     marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
-        if not df_h.empty and movil_sel := st.session_state.get("movil_dinamico", 1):
-        ult_m = df_h[df_h["Movil"] == movil_sel]
-        if not ult_m.empty:
-            km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
-            marca_hist = ult_m.sort_values("Fecha").iloc[-1]["Marca"]
-            if marca_hist in marcas_disponibles: idx_marca = marcas_disponibles.index(marca_hist)
-            chofer_hist = ult_m.sort_values("Fecha").iloc[-1]["Chofer"]
-            if chofer_hist in lista_personal: idx_chofer = lista_personal.index(chofer_hist)
+if not df_h.empty and movil_sel := st.session_state.get("movil_dinamico", 1):
+    ult_m = df_h[df_h["Movil"] == movil_sel]
+if not ult_m.empty:
+     km_sugerido = float(ult_m.sort_values("Fecha").iloc[-1]["KM_Fin"])
+     marca_hist = ult_m.sort_values("Fecha").iloc[-1]["Marca"]
+     if marca_hist in marcas_disponibles: idx_marca = marcas_disponibles.index(marca_hist)
+     chofer_hist = ult_m.sort_values("Fecha").iloc[-1]["Chofer"]
+     if chofer_hist in lista_personal: idx_chofer = lista_personal.index(chofer_hist)
 
     # --- FORMULARIO (Estructura correcta) ---
     with st.form("registro_form_v2", clear_on_submit=True):
