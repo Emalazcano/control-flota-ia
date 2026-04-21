@@ -123,17 +123,20 @@ def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
         
-        # 1. Definimos qué columnas deben ser enteras y cuáles flotantes
-        cols_int = ["Movil", "L_Ralenti", "L_Ticket", "KM_Ini", "KM_Fin", "KM_Recorr"]
-        cols_float = ["Consumo_L100", "Costo_Total_ARS", "Desvio_Neto", "L_Tablero"]
+        # Agregamos aquí todas las columnas que quieres ver como números enteros
+        cols_int = [
+            "Movil", "KM_Ini", "KM_Fin", "KM_Recorr", 
+            "L_Ralenti", "L_Ticket", "L_Tablero", "Desvio_Neto"
+        ]
         
-        # 2. Procesamos columnas enteras
+        # Columnas que sí deben tener decimales (ej. consumos y costos)
+        cols_float = ["Consumo_L100", "Costo_Total_ARS", "Costo_Ralenti_ARS"]
+        
         for col in cols_int:
             if col in df.columns:
-                # Convertimos a numérico, rellenamos con 0, y forzamos a entero (int)
+                # Convertimos, rellenamos con 0 y forzamos a entero
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
-        # 3. Procesamos columnas flotantes (para que mantengan sus decimales)
         for col in cols_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
