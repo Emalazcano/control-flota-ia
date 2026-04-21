@@ -63,7 +63,7 @@ st.markdown("""
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key="TU_API_KEY")
-for m in genai.list_models():
+    for m in genai.list_models():
     if 'generateContent' in m.supported_generation_methods:
         print(m.name)
 
