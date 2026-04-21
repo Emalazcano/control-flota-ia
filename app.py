@@ -100,22 +100,22 @@ def cargar_lista_choferes():
     except:
         return []
 
-def cargar_historial():
+f cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
-        # --- CORRECCIÓN AQUÍ ---
-if 'Fecha' in df.columns:
-    df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-    df['Fecha'] = df['Fecha'].dt.normalize()  # elimina la hora
-    df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
-            
+
+        if 'Fecha' in df.columns:                                              # ← adentro del try
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            df['Fecha'] = df['Fecha'].dt.normalize()
+            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
+
         return df
-    except Exception as e:
+
+    except Exception as e:                                                     # ← después del return
         st.error(f"Error al cargar datos: {e}")
         return pd.DataFrame()
 
