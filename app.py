@@ -18,7 +18,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import tempfile
-import os
+import osimport google.generativeai as genai
 
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DE PÁGINA
@@ -61,11 +61,10 @@ st.markdown("""
 # 2. CONFIGURACIÓN IA GEMINI
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"].strip().strip('"'))
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
-else:
-    st.warning("⚠️ Clave API de Gemini no detectada en Secrets.")
-    model = None
+    genai.configure(api_key="TU_API_KEY")
+for m in genai.list_models():
+    if 'generateContent' in m.supported_generation_methods:
+        print(m.name)
 
 # ─────────────────────────────────────────────
 # 3. USUARIOS Y LOGIN
