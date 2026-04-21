@@ -166,14 +166,14 @@ with tabs[0]:
             with c2:
                 ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
                 # --- REEMPLAZA LA LÍNEA 168 CON ESTO ---
-if not df_h.empty and "Traza" in df_h.columns:
+        if not df_h.empty and "Traza" in df_h.columns:
     # 1. Convertimos todo a string (evita conflictos de tipo)
     # 2. Eliminamos nulos (.dropna())
     # 3. Obtenemos únicos y ordenamos
-    lista_limpia = df_h["Traza"].dropna().astype(str).unique().tolist()
-    traza_ex = ["➕ NUEVA"] + sorted(lista_limpia)
-else:
-    traza_ex = ["➕ NUEVA"]
+                lista_limpia = df_h["Traza"].dropna().astype(str).unique().tolist()
+                traza_ex = ["➕ NUEVA"] + sorted(lista_limpia)
+            else:
+                traza_ex = ["➕ NUEVA"]
                 traza_sel = st.selectbox("🗺️ Traza", traza_ex)
                 nt = st.text_input("✍️ Nombre Nueva Traza").upper()
                 t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
