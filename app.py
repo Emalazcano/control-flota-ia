@@ -402,6 +402,7 @@ with TAB_HALCON:
         st.divider()
 st.subheader("🗺️ Consumo Promedio por Traza")
 
+# Pre-cálculo del dataframe (tu lógica original es correcta)
 df_traza = (
     df_filtrado.groupby("Traza")
     .agg(
@@ -414,47 +415,49 @@ df_traza = (
     .sort_values("Consumo_Promedio", ascending=True)
 )
 
-# Tarjetas — 4 por fila
-cols_por_fila = 4
-filas = [df_traza.iloc[i:i+cols_por_fila] for i in range(0, len(df_traza), cols_por_fila)]
+# Tarjetas: Diseño Ejecutivo
+cols = st.columns(4)
 
-for fila in filas:
-    cols_t = st.columns(cols_por_fila)
-    for j, (_, row) in enumerate(fila.iterrows()):
-        color_score = "#FF4B4B" if row["Consumo_Promedio"] > UMBRAL else "#4CAF50"
-        icono = "🚨" if row["Consumo_Promedio"] > UMBRAL else "✅"
-        with cols_t[j]:
-            st.markdown(f"""
-                <div class="metric-card">
-                    <div class="medal-icon">{icono}</div>
-                    <div class="driver-name" style="font-size:13px;">{row["Traza"]}</div>
-                    <div class="driver-score" style="color:{color_score};">
-                        {row["Consumo_Promedio"]:.1f}
-                    </div>
-                    <div style="color:#aab; font-size:11px;">L/100km</div>
-                    <div style="color:#aab; font-size:11px; margin-top:6px;">
-                        {int(row["Viajes"])} viajes · {int(row["KM_Totales"]):,} km
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+for i, (_, row) in enumerate(df_traza.iterrows()):
+    # Usamos el operador módulo para distribuir en 4 columnas
+    with cols[i % 4]:
+        # Determinar el estado visual
+        is_alert = row["Consumo_Promedio"] > UMBRAL
+        
+        with st.container(border=True):
+            st.metric(
+                label=row["Traza"], 
+                value=f"{row['Consumo_Promedio']:.1f} L/100km",
+                delta="🚨 Supera límite" if is_alert else "✅ Eficiente",
+                delta_color="inverse" if is_alert else "normal"
+            )
+            
+            # Barra de progreso: Normalizada. 
+            # Ajusta el divisor (60) según el consumo máximo esperado en tu flota
+            progreso = min(row["Consumo_Promedio"] / 60, 1.0)
+            st.progress(progreso)
+            
+            st.caption(f"{int(row['Viajes'])} viajes · {int(row['KM_Totales']):,} km")
 
 # Tabla resumen
-st.markdown("#### Detalle por traza")
+st.markdown("---")
+st.markdown("#### 📊 Detalle por traza")
+
+# Usamos .map (compatible con Pandas nuevo) y formateo limpio
 st.dataframe(
-df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
-    lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
-    subset=["Consumo_Promedio"]
-) ,
+    df_traza.sort_values("Consumo_Promedio", ascending=False).style.map(
+        lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
+        subset=["Consumo_Promedio"]
+    ),
     use_container_width=True,
     column_config={
-        "Traza":            st.column_config.TextColumn("Traza"),
-        "Consumo_Promedio": st.column_config.NumberColumn("L/100km",  format="%.2f"),
-        "Viajes":           st.column_config.NumberColumn("Viajes",   format="%d"),
-        "KM_Totales":       st.column_config.NumberColumn("KM Total", format="%d"),
-        "Litros_Totales":   st.column_config.NumberColumn("Litros",   format="%.1f"),
+        "Traza": st.column_config.TextColumn("Traza"),
+        "Consumo_Promedio": st.column_config.NumberColumn("L/100km", format="%.2f"),
+        "Viajes": st.column_config.NumberColumn("Viajes", format="%d"),
+        "KM_Totales": st.column_config.NumberColumn("KM Total", format="%d"),
+        "Litros_Totales": st.column_config.NumberColumn("Litros", format="%.1f"),
     }
 )
-
 # ─────────────────────────────────────────────
 # TAB: HISTORIAL
 # ─────────────────────────────────────────────
