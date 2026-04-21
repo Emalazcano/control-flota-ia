@@ -139,20 +139,22 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
-        # 4. Aplicamos el formato de flotantes
-        for col in cols_float:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # 5. Tratamiento de Fechas (Asegurando el formato correcto)
-        try:
-            if 'Fecha' in df.columns:
+# 4. Aplicamos el formato de flotantes
+    for col in cols_float:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+    # 5. Tratamiento de Fechas (Asegurando el formato correcto)
+    try:
+        if 'Fecha' in df.columns:
+            # Esta línea debe estar más adentro que el 'if'
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         
-            return df
-        
-        except Exception as e:
-            st.error(f"Error al cargar datos: {e}")
-            return pd.DataFrame()        
+        return df
+
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
+        return pd.DataFrame()
 
 def guardar_historial(df_nuevo):
     """Convierte fechas a texto antes de escribir para evitar el 0:00:00."""
