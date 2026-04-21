@@ -6,6 +6,7 @@ from datetime import datetime
 import time
 import os
 import google.generativeai as genai
+
 # --- CSS PARA OPTIMIZACIÓN MÓVIL ---
 st.markdown("""
     <style>
@@ -150,7 +151,7 @@ with tabs[0]:
                 if marca_hist in marcas_disponibles:
                     idx_marca = marcas_disponibles.index(marca_hist)
                 
-                # Sugerir Chofer (NUEVO)
+                # Sugerir Chofer
                 chofer_hist = ult_m.sort_values("Fecha").iloc[-1]["Chofer"]
                 if chofer_hist in lista_personal:
                     idx_chofer = lista_personal.index(chofer_hist)
@@ -163,20 +164,20 @@ with tabs[0]:
                 chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
                 precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
                 fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
+            
             with c2:
                 ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-                # --- REEMPLAZA LA LÍNEA 168 CON ESTO ---
-if not df_h.empty and "Traza" in df_h.columns:
-    # 1. Convertimos todo a string (evita conflictos de tipo)
-    # 2. Eliminamos nulos (.dropna())
-    # 3. Obtenemos únicos y ordenamos
-    lista_limpia = df_h["Traza"].dropna().astype(str).unique().tolist()
-    traza_ex = ["➕ NUEVA"] + sorted(lista_limpia)
-else:
-    traza_ex = ["➕ NUEVA"]
+                
+                if not df_h.empty and "Traza" in df_h.columns:
+                    lista_limpia = df_h["Traza"].dropna().astype(str).unique().tolist()
+                    traza_ex = ["➕ NUEVA"] + sorted(lista_limpia)
+                else:
+                    traza_ex = ["➕ NUEVA"]
+                
                 traza_sel = st.selectbox("🗺️ Traza", traza_ex)
                 nt = st.text_input("✍️ Nombre Nueva Traza").upper()
                 t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
+            
             with c3:
                 kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
                 kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
@@ -184,6 +185,7 @@ else:
                 ltab = st.number_input("📟 Litros Tablero", value=0.0)
                 lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
+            # Métricas dinámicas dentro del formulario
             dist_v = int(kmf - kmi) if kmf > kmi else 0
             cons_v = (lt / dist_v * 100) if dist_v > 0 and lt > 0 else 0
             costo_v = lt * precio_comb
@@ -195,30 +197,31 @@ else:
             with v2: st.metric("🔢 Consumo", f"{cons_v:.1f} L/100")
             with v3: st.metric("💰 Costo Estimado", f"${costo_v:,.0f}")
             with v4: st.metric("🚨 Desvío (Ltrs)", f"{desv_v:.1f}", delta=f"{desv_v:.1f}", delta_color="inverse")
+            
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
+    # Lógica de guardado FUERA del formulario
     if submit_button:
-        # 1. Validación de KM: Que el final sea mayor al inicial
+        # 1. Validación de KM
         if kmf <= kmi:
             st.error(f"⚠️ Error: El KM Final ({kmf}) debe ser mayor al KM Inicial ({kmi}).")
             st.stop()
         
-        # 2. Validación de coherencia de carga
+        # 2. Validación de coherencia
         if lt <= 0:
             st.error("⚠️ Error: Debes ingresar los Litros de Ticket.")
             st.stop()
 
-        # 3. Validación de Consumo Físico (Rango lógico)
+        # 3. Validación de Consumo
         dist_calculada = kmf - kmi
         consumo_estimado = (lt / dist_calculada * 100) if dist_calculada > 0 else 0
         
         if consumo_estimado > 100 or consumo_estimado < 10:
             st.warning(f"⚠️ Consumo fuera de rango lógico ({consumo_estimado:.1f} L/100km).")
-            # Esto permite forzar el guardado si el valor es correcto pero inusual
             if not st.checkbox("Confirmar: ¿Los datos son correctos?"):
                 st.stop()
 
-        # Si supera las validaciones, procedemos con el guardado
+        # Guardado
         dist_final = int(kmf - kmi)
         cons_final = round((lt / dist_final * 100), 2) if dist_final > 0 else 0
         costo_final = round(lt * precio_comb, 2)
@@ -301,7 +304,7 @@ with tabs[2]:
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_v, use_container_width=True)
 
-# --- TAB 3: ASISTENTE IA (OPTIMIZADO PARA AHORRAR CUOTA) ---
+# --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
     st.subheader("🤖 Asistente Inteligente")
 
@@ -360,6 +363,7 @@ with tabs[3]:
         if 'respuesta_final' in locals():
             st.markdown(respuesta_final)
             st.session_state.messages.append({"role": "assistant", "content": respuesta_final})
+
 # --- TAB 4: ANALÍTICA AVANZADA ---
 with tabs[4]:
     st.subheader("📈 Analítica y Diagnóstico")
@@ -370,17 +374,39 @@ with tabs[4]:
     df_ana['Mes'] = df_ana['Fecha'].dt.to_period('M').astype(str)
 
     # 1. TENDENCIAS (Detectar desgaste mecánico)
-    st.markdown("### 📉 Tendencia de Consumo (Detectar Desgaste)")
-    st.write("Visualiza la evolución del consumo de cada móvil mes a mes.")
+    st.markdown("### 📉 Tendencia de Consumo vs. Promedio Flota")
     
-    moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", options=sorted(df_ana['Movil'].unique()), default=[df_ana['Movil'].iloc[0]])
-    df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
-    df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
-    
-    fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", markers=True, template="plotly_dark")
-    st.plotly_chart(fig_line, use_container_width=True)
+    # Calcular promedio general de la flota por mes para tener una referencia
+    df_promedio_flota = df_ana.groupby('Mes')['Consumo_L100'].mean().reset_index()
+    df_promedio_flota.rename(columns={'Consumo_L100': 'Promedio_Flota'}, inplace=True)
 
-    st.divider()
+    moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", 
+                                          options=sorted(df_ana['Movil'].unique()), 
+                                          default=[df_ana['Movil'].iloc[0]])
+    
+    if moviles_seleccionados:
+        df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
+        df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
+        
+        # Crear gráfico base
+        fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", 
+                           markers=True, template="plotly_dark",
+                           labels={"Consumo_L100": "Consumo (L/100km)", "Mes": "Periodo"})
+        
+        # Añadir la línea de promedio de la flota (punteada y gris)
+        fig_line.add_scatter(x=df_promedio_flota['Mes'], y=df_promedio_flota['Promedio_Flota'],
+                             mode='lines', name='Promedio Flota',
+                             line=dict(color='white', width=2, dash='dash'),
+                             hovertemplate="Promedio Flota: %{y:.1f} L/100")
+        
+        # Mejorar aspecto visual
+        fig_line.update_layout(hovermode="x unified", legend_title="Unidad")
+        
+        st.plotly_chart(fig_line, use_container_width=True)
+        
+        st.info("💡 **Cómo leer esto:** La línea punteada blanca representa el promedio de toda tu flota. Si la línea de tu móvil está **arriba** de la blanca, está consumiendo más que el promedio. Si está **abajo**, es más eficiente.")
+    else:
+        st.warning("Selecciona al menos un móvil para ver la tendencia.")
 
     # 2. BENCHMARK (Marca/Modelo vs Ruta)
     st.markdown("### ⚖️ Benchmark: Marca vs Ruta")
