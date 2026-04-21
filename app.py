@@ -18,6 +18,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import tempfile
+import os
+import google.generativeai as genai
 
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DE PÁGINA
