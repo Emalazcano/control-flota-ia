@@ -397,7 +397,8 @@ with TAB_HALCON:
         df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
         fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca",
                           barmode="group", text_auto='.1f', template="plotly_dark")
-        st.plotly_chart(fig_comp, use_container_width=True)
+        st.plotly_chart(fig_comp, use_container_width=True
+                )
         st.divider()
 st.subheader("🗺️ Consumo Promedio por Traza")
 
@@ -413,25 +414,46 @@ df_traza = (
     .sort_values("Consumo_Promedio", ascending=True)
 )
 
-# Gráfico de barras horizontal
-fig_traza = px.bar(
-    df_traza,
-    x="Consumo_Promedio",
-    y="Traza",
-    orientation="h",
-    text_auto=".1f",
-    template="plotly_dark",
-    color="Consumo_Promedio",
-    color_continuous_scale=["#4CAF50", "#FFA500", "#FF4B4B"],
-    labels={"Consumo_Promedio": "L/100km", "Traza": ""},
-    title="Consumo promedio por traza (L/100km)"
+# Tarjetas — 4 por fila
+cols_por_fila = 4
+filas = [df_traza.iloc[i:i+cols_por_fila] for i in range(0, len(df_traza), cols_por_fila)]
+
+for fila in filas:
+    cols_t = st.columns(cols_por_fila)
+    for j, (_, row) in enumerate(fila.iterrows()):
+        color_score = "#FF4B4B" if row["Consumo_Promedio"] > UMBRAL else "#4CAF50"
+        icono = "🚨" if row["Consumo_Promedio"] > UMBRAL else "✅"
+        with cols_t[j]:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="medal-icon">{icono}</div>
+                    <div class="driver-name" style="font-size:13px;">{row["Traza"]}</div>
+                    <div class="driver-score" style="color:{color_score};">
+                        {row["Consumo_Promedio"]:.1f}
+                    </div>
+                    <div style="color:#aab; font-size:11px;">L/100km</div>
+                    <div style="color:#aab; font-size:11px; margin-top:6px;">
+                        {int(row["Viajes"])} viajes · {int(row["KM_Totales"]):,} km
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+# Tabla resumen
+st.markdown("#### Detalle por traza")
+st.dataframe(
+    df_traza.sort_values("Consumo_Promedio", ascending=False).style.applymap(
+        lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
+        subset=["Consumo_Promedio"]
+    ),
+    use_container_width=True,
+    column_config={
+        "Traza":            st.column_config.TextColumn("Traza"),
+        "Consumo_Promedio": st.column_config.NumberColumn("L/100km",  format="%.2f"),
+        "Viajes":           st.column_config.NumberColumn("Viajes",   format="%d"),
+        "KM_Totales":       st.column_config.NumberColumn("KM Total", format="%d"),
+        "Litros_Totales":   st.column_config.NumberColumn("Litros",   format="%.1f"),
+    }
 )
-fig_traza.add_vline(
-    x=UMBRAL, line_dash="dot", line_color="white",
-    annotation_text=f"Umbral {UMBRAL:.0f}", annotation_position="top right"
-)
-fig_traza.update_layout(coloraxis_showscale=False, yaxis={'categoryorder': 'total ascending'})
-st.plotly_chart(fig_traza, use_container_width=True)
 
 # Tabla resumen
 st.dataframe(
