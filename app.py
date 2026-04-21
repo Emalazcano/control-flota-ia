@@ -425,12 +425,22 @@ with TAB_HIST:
                 return ''
 
     st.dataframe(
-    df_v.style.map(colorear_consumo, subset=['Consumo_L100']),  # <-- ¡AQUÍ FALTABA LA COMA!
+    df_v.style.map(colorear_consumo, subset=['Consumo_L100']),
     use_container_width=True,
     column_config={
+        # Números enteros (sin decimales)
         "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
         "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
         "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
+        "L_Ralenti": st.column_config.NumberColumn("L_Ralenti", format="%d"),
+        "L_Ticket": st.column_config.NumberColumn("L_Ticket", format="%d"),
+        "L_Tablero": st.column_config.NumberColumn("L_Tablero", format="%d"),
+        "Desvio_Neto": st.column_config.NumberColumn("Desvío Neto", format="%d"),
+        
+        # Números con decimales (formato de consumo y dinero)
+        "Consumo_L100": st.column_config.NumberColumn("Consumo L/100", format="%.2f"),
+        "Costo_Total_ARS": st.column_config.NumberColumn("Costo Total", format="$%.2f"),
+        "Costo_Ralenti_ARS": st.column_config.NumberColumn("Costo Ralenti", format="$%.2f"),
     }
 )
 
