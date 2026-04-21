@@ -222,6 +222,7 @@ if TAB_REG:
 
         col_m1, _ = st.columns([1, 2])
         movil_sel = col_m1.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
+        precio_comb = st.session_state["precio_gasoil"]
 
         km_sugerido = 0.0
         idx_marca   = 0
@@ -243,7 +244,6 @@ if TAB_REG:
             with c1:
                 marca       = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
                 chofer      = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
-                precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
                 fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
             with c2:
                 ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
