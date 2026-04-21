@@ -441,7 +441,7 @@ for fila in filas:
 # Tabla resumen
 st.markdown("#### Detalle por traza")
 st.dataframe(
-    df_traza.sort_values("Consumo_Promedio", ascending=False).style.applymap(
+df_traza.sort_values("Consumo_Promedio", ascending=False).style.applymap(
         lambda v: 'background-color: #421212; color: white' if isinstance(v, float) and v > UMBRAL else '',
         subset=["Consumo_Promedio"]
     ),
