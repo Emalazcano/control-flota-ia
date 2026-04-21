@@ -63,6 +63,7 @@ st.markdown("""
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    model = genai.GenerativeModel('gemini-2.0-flash-lite')
 else:
     st.error("⚠️ Configura tu GOOGLE_API_KEY en los secretos de Streamlit.")
 @st.cache_data(show_spinner=True)
