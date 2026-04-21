@@ -302,7 +302,8 @@ with TAB_HALCON:
         st.info("Sin datos disponibles.")
     else:
         df_ana = df_h.copy()
-        df_ana['Fecha']   = pd.to_datetime(df_ana['Fecha'])
+        # MODIFICACIÓN: Agregamos dayfirst=True y errors='coerce' para mayor seguridad
+        df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'], dayfirst=True, errors='coerce')
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
