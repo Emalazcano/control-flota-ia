@@ -139,12 +139,12 @@ def cargar_historial():
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
         
-# 4. Aplicamos el formato de flotantes
+        # 4. Aplicamos el formato de flotantes
         for col in cols_float:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    # 5. Tratamiento de Fechas (Asegurando el formato correcto)
+        # 5. Tratamiento de Fechas (Asegurando el formato correcto)
         try:
             if 'Fecha' in df.columns:
             # Esta línea debe estar más adentro que el 'if'
