@@ -18,7 +18,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import tempfile
-import osimport google.generativeai as genai
 
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DE PÁGINA
@@ -61,6 +60,7 @@ st.markdown("""
 # 2. CONFIGURACIÓN IA GEMINI
 # ─────────────────────────────────────────────
 if "GOOGLE_API_KEY" in st.secrets:
+import osimport google.generativeai as genai
     genai.configure(api_key="TU_API_KEY")
 for m in genai.list_models():
     if 'generateContent' in m.supported_generation_methods:
