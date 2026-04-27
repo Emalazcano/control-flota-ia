@@ -27,6 +27,10 @@ st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 st.markdown("""
 <style>
+    /* Ocultar botones de +/- */
+    [data-testid="stNumberInput"] button {
+        display: none;
+    }
 @media only screen and (max-width: 600px) {
     .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
     [data-testid="stMetricValue"] { font-size: 20px !important; }
