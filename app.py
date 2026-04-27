@@ -213,38 +213,21 @@ if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
         
-        # --- Lógica de carga de datos previos ---
-        col_m1, _ = st.columns([1, 2])
-        movil_sel = col_m1.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
-        precio_comb = st.session_state["precio_gasoil"]
-        km_sugerido = 0.0
-        idx_marca   = 0
-        idx_chofer  = 0
-        marcas_disponibles = ["SCANIA", "MERCEDES BENZ"]
-        
-        if not df_h.empty:
-            hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
-            if not hist_movil.empty:
-                ult_r = hist_movil.sort_values("Fecha").iloc[-1]
-                km_sugerido = float(ult_r["KM_Fin"])
-                if ult_r["Marca"] in marcas_disponibles:
-                    idx_marca = marcas_disponibles.index(ult_r["Marca"])
-                if ult_r["Chofer"] in lista_personal:
-                    idx_chofer = lista_personal.index(ult_r["Chofer"])
+        # --- CSS para ocultar los botones +/- ---
+        st.markdown("""<style>[data-testid="stNumberInput"] button {display: none;}</style>""", unsafe_allow_html=True)
 
-        # --- Formulario de Registro ---
+        # (Mantén aquí tu lógica de carga de datos: movil_sel, df_h, etc.)
+        # ... 
+
         with st.form("registro_form_v2", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
-                marca       = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
-                chofer      = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
+                marca       = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], index=idx_marca, horizontal=True)
+                chofer      = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
                 fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
             with c2:
                 ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-                traza_ex  = ["➕ NUEVA"] + (
-                    sorted(df_h["Traza"].dropna().astype(str).unique().tolist())
-                    if not df_h.empty and "Traza" in df_h.columns else []
-                )
+                # ... (tu lógica de traza)
                 traza_sel = st.selectbox("🗺️ Traza", traza_ex)
                 nt        = st.text_input("✍️ Nombre Nueva Traza").upper()
                 t_final   = nt if traza_sel == "➕ NUEVA" else traza_sel
@@ -252,18 +235,18 @@ if TAB_REG:
                 kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
                 kmf = st.number_input("🏁 KM Final",   value=0, step=1, format="%d")
                 
-                # Nuevos inputs de litros
+                # --- AQUÍ ESTÁ LA LÓGICA DE DEPENDENCIA ---
                 c_lt1, c_lt2 = st.columns(2)
                 l_cisterna = c_lt1.number_input("⛽ Litros Cisterna", value=0.0, step=0.1)
                 l_ypf      = c_lt2.number_input("⛽ Litros YPF", value=0.0, step=0.1)
                 
-                # Definición de lt para cálculos
-                lt = l_cisterna + l_ypf
+                # Definimos el total para los cálculos posteriores
+                lt = l_cisterna + l_ypf 
                 
                 ltab = st.number_input("📟 Litros Tablero",  value=0.0)
                 lral = st.number_input("⏳ Litros Ralentí",  value=0.0)
 
-            # --- Cálculos y Métricas en tiempo real ---
+            # --- Cálculos y Métricas ---
             dist_v = int(kmf - kmi) if kmf > kmi else 0
             cons_v = (lt / dist_v * 100) if dist_v > 0 else 0.0
             
@@ -274,20 +257,12 @@ if TAB_REG:
             v3.metric("💰 Costo",   f"${(lt * precio_comb):,.0f}")
             v4.metric("🚨 Desvío",  f"{(lt - (ltab + lral)):.1f}")
             
-            if cons_v > UMBRAL:
-                st.markdown(f'<div class="alert-banner">🚨 <b>ALERTA:</b> El consumo ({cons_v:.1f} L/100km) supera el umbral ({UMBRAL:.0f} L/100km).</div>', unsafe_allow_html=True)
-            
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
-        # --- Lógica de guardado ---
         if submit_button:
             if kmf <= kmi: st.error("⚠️ El KM Final debe ser mayor al Inicial.")
-            elif lt <= 0: st.error("⚠️ Los litros deben ser mayores a 0.")
-            elif not t_final: st.error("⚠️ Ingresá un nombre de traza.")
+            elif lt <= 0: st.error("⚠️ Debes ingresar litros (Cisterna o YPF).")
             else:
-                dist_final = int(kmf - kmi)
-                cons_final = round(lt / dist_final * 100, 2) if dist_final > 0 else 0
-                
                 nuevo_reg = {
                     "Fecha":           fecha_input.strftime('%d/%m/%Y'),
                     "Chofer":          chofer,
@@ -297,20 +272,21 @@ if TAB_REG:
                     "Traza":           t_final,
                     "KM_Ini":          kmi,
                     "KM_Fin":          kmf,
-                    "KM_Recorr":       dist_final,
+                    "KM_Recorr":       int(kmf - kmi),
                     "L_Ticket":        lt,
                     "Litros_Cisterna": l_cisterna,
                     "Litros_YPF":      l_ypf,
                     "L_Tablero":       ltab,
                     "L_Ralenti":       lral,
-                    "Consumo_L100":    cons_final,
+                    "Consumo_L100":    round(lt / (kmf - kmi) * 100, 2) if (kmf - kmi) > 0 else 0,
                     "Costo_Total_ARS": round(lt * precio_comb, 2),
                     "Desvio_Neto":     round(lt - (ltab + lral), 2),
                 }
-                
+                # 3. Guardamos
                 df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 guardar_historial(df_final)
                 
+                # 4. AQUÍ ESTÁ LA LÓGICA DEL UMBRAL:
                 if cons_final > UMBRAL:
                     st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final} L/100km) supera el umbral. Revisá el vehículo.")
                 else:
