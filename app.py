@@ -213,12 +213,35 @@ if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
         
-        # --- CSS para ocultar los botones +/- ---
+        # --- 1. INICIALIZACIÓN (Evita el NameError) ---
+        idx_marca = 0
+        idx_chofer = 0
+        km_sugerido = 0
+        # Definimos UMBRAL aquí si no lo tienes global, o asegúrate de tenerlo arriba
+        UMBRAL = 40.0 
+        
+        # --- 2. CSS PARA OCULTAR BOTONES +/- ---
         st.markdown("""<style>[data-testid="stNumberInput"] button {display: none;}</style>""", unsafe_allow_html=True)
 
-        # (Mantén aquí tu lógica de carga de datos: movil_sel, df_h, etc.)
-        # ... 
+        # --- 3. Lógica de carga de datos previos ---
+        col_m1, _ = st.columns([1, 2])
+        # Asegúrate de que 'lista_personal' esté definida antes de esto
+        movil_sel = col_m1.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
+        
+        if 'df_h' in locals() and not df_h.empty:
+            hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
+            if not hist_movil.empty:
+                ult_r = hist_movil.sort_values("Fecha").iloc[-1]
+                km_sugerido = float(ult_r["KM_Fin"])
+                
+                # Asignamos índices solo si encontramos historial
+                if ult_r["Marca"] == "SCANIA": idx_marca = 0
+                elif ult_r["Marca"] == "MERCEDES BENZ": idx_marca = 1
+                
+                if 'lista_personal' in locals() and ult_r["Chofer"] in lista_personal:
+                    idx_chofer = lista_personal.index(ult_r["Chofer"])
 
+        # --- 4. FORMULARIO ---
         with st.form("registro_form_v2", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -227,7 +250,6 @@ if TAB_REG:
                 fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
             with c2:
                 ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-                # ... (tu lógica de traza)
                 traza_sel = st.selectbox("🗺️ Traza", traza_ex)
                 nt        = st.text_input("✍️ Nombre Nueva Traza").upper()
                 t_final   = nt if traza_sel == "➕ NUEVA" else traza_sel
@@ -235,33 +257,34 @@ if TAB_REG:
                 kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
                 kmf = st.number_input("🏁 KM Final",   value=0, step=1, format="%d")
                 
-                # --- AQUÍ ESTÁ LA LÓGICA DE DEPENDENCIA ---
+                # Campos de Litros
                 c_lt1, c_lt2 = st.columns(2)
-                l_cisterna = c_lt1.number_input("⛽ Litros Cisterna", value=0.0, step=0.1)
-                l_ypf      = c_lt2.number_input("⛽ Litros YPF", value=0.0, step=0.1)
-                
-                # Definimos el total para los cálculos posteriores
-                lt = l_cisterna + l_ypf 
+                l_cisterna = c_lt1.number_input("⛽ L. Cisterna", value=0.0, step=0.1)
+                l_ypf      = c_lt2.number_input("⛽ L. YPF", value=0.0, step=0.1)
+                lt         = l_cisterna + l_ypf # Calculado en tiempo real
                 
                 ltab = st.number_input("📟 Litros Tablero",  value=0.0)
                 lral = st.number_input("⏳ Litros Ralentí",  value=0.0)
 
             # --- Cálculos y Métricas ---
-            dist_v = int(kmf - kmi) if kmf > kmi else 0
-            cons_v = (lt / dist_v * 100) if dist_v > 0 else 0.0
+            dist_final = int(kmf - kmi) if kmf > kmi else 0
+            cons_final = round(lt / dist_final * 100, 2) if dist_final > 0 else 0.0
             
             st.markdown("---")
             v1, v2, v3, v4 = st.columns(4)
-            v1.metric("📏 KM",     f"{dist_v:,}")
-            v2.metric("🔢 Cons",    f"{cons_v:.1f} L/100")
+            v1.metric("📏 KM",     f"{dist_final:,}")
+            v2.metric("🔢 Cons",    f"{cons_final:.1f} L/100")
             v3.metric("💰 Costo",   f"${(lt * precio_comb):,.0f}")
             v4.metric("🚨 Desvío",  f"{(lt - (ltab + lral)):.1f}")
             
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
+        # --- 5. LÓGICA DE GUARDADO ---
         if submit_button:
-            if kmf <= kmi: st.error("⚠️ El KM Final debe ser mayor al Inicial.")
-            elif lt <= 0: st.error("⚠️ Debes ingresar litros (Cisterna o YPF).")
+            if kmf <= kmi: 
+                st.error("⚠️ El KM Final debe ser mayor al Inicial.")
+            elif lt <= 0: 
+                st.error("⚠️ Debes ingresar litros (Cisterna o YPF).")
             else:
                 nuevo_reg = {
                     "Fecha":           fecha_input.strftime('%d/%m/%Y'),
@@ -272,21 +295,21 @@ if TAB_REG:
                     "Traza":           t_final,
                     "KM_Ini":          kmi,
                     "KM_Fin":          kmf,
-                    "KM_Recorr":       int(kmf - kmi),
+                    "KM_Recorr":       dist_final,
                     "L_Ticket":        lt,
                     "Litros_Cisterna": l_cisterna,
                     "Litros_YPF":      l_ypf,
                     "L_Tablero":       ltab,
                     "L_Ralenti":       lral,
-                    "Consumo_L100":    round(lt / (kmf - kmi) * 100, 2) if (kmf - kmi) > 0 else 0,
+                    "Consumo_L100":    cons_final,
                     "Costo_Total_ARS": round(lt * precio_comb, 2),
                     "Desvio_Neto":     round(lt - (ltab + lral), 2),
                 }
-                # 3. Guardamos
+                
                 df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 guardar_historial(df_final)
                 
-                # 4. AQUÍ ESTÁ LA LÓGICA DEL UMBRAL:
+                # Alerta del umbral
                 if cons_final > UMBRAL:
                     st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final} L/100km) supera el umbral. Revisá el vehículo.")
                 else:
@@ -294,7 +317,6 @@ if TAB_REG:
                 
                 time.sleep(1)
                 st.rerun()
-
 # ─────────────────────────────────────────────
 # TAB: OJO DE HALCÓN
 # ─────────────────────────────────────────────
