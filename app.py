@@ -245,7 +245,9 @@ if TAB_REG:
             with c3:
                 kmi  = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
                 kmf  = st.number_input("🏁 KM Final",   value=0, step=1, format="%d")
-                lt   = st.number_input("⛽ Litros Ticket",   value=0.0)
+                c_lt1, c_lt2 = st.columns(2)
+                l_cisterna = c_lt1.number_input("⛽ Litros Cisterna", value=0.0, step=0.1)
+                l_ypf      = c_lt2.number_input("⛽ Litros YPF", value=0.0, step=0.1)
                 ltab = st.number_input("📟 Litros Tablero",  value=0.0)
                 lral = st.number_input("⏳ Litros Ralentí",  value=0.0)
 
@@ -279,6 +281,8 @@ if TAB_REG:
                     "KM_Fin":        kmf,
                     "KM_Recorr":     dist_final,
                     "L_Ticket":      lt,
+                    "Litros_Cisterna": l_cisterna,
+                    "Litros_YPF": l_ypf,
                     "L_Tablero":     ltab,
                     "L_Ralenti":     lral,
                     "Consumo_L100":  cons_final,
