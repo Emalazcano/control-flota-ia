@@ -223,8 +223,10 @@ if TAB_REG:
 
         # --- 1. Selector de Móvil (Agregado aquí para que siempre aparezca) ---
         # Si 'lista_moviles' no existe, la creamos al vuelo para no romper nada
-        lista_moviles = list(range(1, 101)) 
-        movil_sel = st.selectbox("🔢 Selecciona Móvil", lista_moviles, index=34)
+        col1, col2 = st.columns([1, 4]) # [1, 4] hace que el selector ocupe solo 1/5 del ancho
+        with col1:
+            lista_moviles = list(range(1, 101))
+            movil_sel = st.selectbox("🔢 Selecciona Móvil", lista_moviles, index=34)
 
         # --- 2. Lógica de Carga de Historial (TU CÓDIGO ORIGINAL) ---
         # Aseguramos variables base para evitar NameError
