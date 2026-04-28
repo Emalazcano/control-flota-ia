@@ -409,7 +409,7 @@ if TAB_REG:
         # Usamos columnas para controlar el ancho
         col_m1, col_m2 = st.columns([1, 4])
         with col_m1:
-        movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_unico")
+            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_unico")
 
         # --- 2. Lógica de Carga de Historial ---
         # Valores iniciales seguros
