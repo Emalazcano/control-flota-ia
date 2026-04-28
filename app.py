@@ -257,7 +257,7 @@ with TAB_HALCON:
         cols = st.columns(4)
         for i, (_, row) in enumerate(df_traza.iterrows()):
             with cols[i % 4]:
-                is_alert = row["Consumo_Promedio"] > UMBRAL
+                is_alert = row["Consumo_Promedio"] > st.session_state.get("umbral_consumo", 35.0)
                 with st.container(border=True):
                     st.metric(label=row["Traza"], value=f"{row['Consumo_Promedio']:.1f} L/100km", delta="🚨 Supera límite" if is_alert else "✅ Eficiente", delta_color="inverse" if is_alert else "normal")
                     progreso = min(row["Consumo_Promedio"] / 60, 1.0)
