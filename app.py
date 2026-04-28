@@ -210,9 +210,18 @@ if TAB_REG:
 with TAB_HIST:
     st.subheader("📋 Historial de Registros")
     if not df_h.empty:
-        movil_sel = st.session_state.get("movil_reg", 1)
-        df_hist_filtrado = df_h[df_h["Movil"] == int(movil_sel)]
-        st.dataframe(df_hist_filtrado.sort_values("Fecha", ascending=False), use_container_width=True)
+        # Agregamos un toggle para controlar el filtro (apagado por defecto)
+        filtro_activado = st.toggle("Filtrar por móvil seleccionado", value=False)
+        
+        if filtro_activado:
+            movil_sel = st.session_state.get("movil_reg", 1)
+            df_to_show = df_h[df_h["Movil"] == int(movil_sel)]
+            st.write(f"Mostrando historial del móvil: {movil_sel}")
+        else:
+            df_to_show = df_h
+            st.write("Mostrando todo el historial de la flota.")
+            
+        st.dataframe(df_to_show.sort_values("Fecha", ascending=False), use_container_width=True)
     else:
         st.info("No hay datos cargados.")
 
