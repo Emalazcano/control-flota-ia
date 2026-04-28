@@ -24,6 +24,9 @@ import os
 # 1. CONFIGURACIÓN DE PÁGINA
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
+if "mensaje_confirmacion" in st.session_state:
+    st.success(st.session_state["mensaje_confirmacion"])
+    del st.session_state["mensaje_confirmacion"]
 
 # (Estilos CSS sin cambios)
 st.markdown("""
@@ -140,11 +143,12 @@ else:
 if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
-        # Lógica de precarga
-        col_sel, col_espacio = st.columns([1, 3]) # [1, 3] significa que el selector ocupa 1/4 del ancho
         
+        # 1. Precarga de datos
+        col_sel, col_espacio = st.columns([1, 3])
         with col_sel:
             movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_reg")
+        
         idx_marca, idx_chofer, km_sugerido = 0, 0, 0
         traza_ex = ["➕ NUEVA"]
         
@@ -158,6 +162,7 @@ if TAB_REG:
                 elif ult_r["Marca"] == "MERCEDES BENZ": idx_marca = 1
                 traza_ex = ["➕ NUEVA"] + sorted(df_h["Traza"].unique().tolist())
 
+        # 2. Formulario
         with st.form("registro_form_final", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -176,45 +181,23 @@ if TAB_REG:
                 l_ypf = st.number_input("⛽ L. YPF", value=0.0, step=0.1)
                 ltab = st.number_input("📟 L. Tablero", value=0.0, step=0.1)
                 lral = st.number_input("⏳ L. Ralentí", value=0.0, step=0.1)
-                # --- CÁLCULOS EN TIEMPO REAL ---
-            st.divider()
-            lt_total = l_cisterna + l_ypf
-            dist_v = max(0, int(kmf - kmi))
             
-            # Cálculo de promedio (evitando división por cero)
-            cons_final = (lt_total / dist_v * 100) if dist_v > 0 else 0.0
-            
-            # Cálculo de costo y desvío usando el session_state (fuente de verdad)
-            costo_c = lt_total * st.session_state.get("precio_gasoil", 2065.0)
-            desvio_c = max(0, cons_final - st.session_state.get("umbral_consumo", 35.0))
+            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
-            # Visualización de métricas
-            c_met1, c_met2, c_met3, c_met4 = st.columns(4)
-            c_met1.metric("🛣️ KM", f"{dist_v:,.0f}")
-            c_met2.metric("🔢 Promedio", f"{cons_final:.1f} L/100")
-            c_met3.metric("💰 Costo", f"${costo_c:,.0f}")
-            c_met4.metric("🚨 Desvío", f"{desvio_c:.1f}")
-            
-            c_izq, c_centro, c_der = st.columns([1, 2, 1])
-            with c_centro:
-                submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-
+        # 3. Lógica única de procesamiento al hacer clic
         if submit_button:
             lt_total = l_cisterna + l_ypf
             dist_v = max(0, int(kmf - kmi))
-            # NUEVA VALIDACIÓN:
+            
+            # Validación
             if kmf <= kmi:
                 st.error("⚠️ Error: El KM Final debe ser mayor al KM Inicial.")
             elif dist_v == 0:
                 st.warning("⚠️ Atención: El recorrido es 0 KM, revisa los datos.")
+            elif lt_total <= 0:
+                st.error("⚠️ La suma de litros debe ser mayor a 0.")
             else:
-                # AQUÍ va todo tu bloque de guardado original (pd.concat, guardar_historial, etc.)
-                st.success("✅ Registro validado y guardado correctamente.")
-                st.rerun()
-            
-            if kmf <= kmi: st.error("⚠️ El KM Final debe ser mayor al Inicial.")
-            elif lt_total <= 0: st.error("⚠️ La suma de litros debe ser mayor a 0.")
-            else:
+                # Guardado
                 nuevo_reg = {
                     "Fecha": fecha_input.strftime('%d/%m/%Y'),
                     "Chofer": chofer,
@@ -226,51 +209,18 @@ if TAB_REG:
                     "KM_Fin": int(kmf),
                     "KM_Recorr": dist_v,
                     "L_Ticket": lt_total,
-                    "L_Cisterna": float(l_cisterna), # Guardado separado
-                    "L_YPF": float(l_ypf),           # Guardado separado
+                    "L_Cisterna": float(l_cisterna),
+                    "L_YPF": float(l_ypf),
                     "L_Tablero": float(ltab),
                     "L_Ralenti": float(lral),
                     "Consumo_L100": (lt_total / dist_v * 100) if dist_v > 0 else 0,
-                    "Costo_Total_ARS": lt_total * st.session_state["precio_gasoil"]
+                    "Costo_Total_ARS": lt_total * st.session_state.get("precio_gasoil", 2065.0)
                 }
+                
                 df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 guardar_historial(df_final)
                 st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
                 st.rerun()
-
-# ─────────────────────────────────────────────
-# 2. TAB HISTORIAL (Corregido y optimizado)
-# ─────────────────────────────────────────────
-# ─────────────────────────────────────────────
-# 2. TAB HISTORIAL (Corregido: Visualización de fecha limpia)
-# ─────────────────────────────────────────────
-with TAB_HIST:
-    st.subheader("📋 Historial de Registros")
-    df_h = cargar_historial() # Aseguramos tener los datos frescos
-    
-    if not df_h.empty:
-        filtrar = st.toggle("Filtrar solo por el móvil seleccionado", value=False)
-        
-        if filtrar:
-            movil_sel = st.session_state.get("movil_reg", 1)
-            df_to_show = df_h[df_h["Movil"] == int(movil_sel)]
-        else:
-            df_to_show = df_h
-            
-        # Configuramos la visualización de la fecha aquí
-        st.dataframe(
-            df_to_show.sort_values("Fecha", ascending=False), 
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Fecha": st.column_config.DateColumn(
-                    "Fecha",
-                    format="DD/MM/YYYY" # Esto elimina el 00:00:00 visualmente
-                )
-            }
-        )
-    else:
-        st.info("No hay datos cargados.")
 # ─────────────────────────────────────────────
 # TAB: OJO DE HALCÓN
 # ─────────────────────────────────────────────
