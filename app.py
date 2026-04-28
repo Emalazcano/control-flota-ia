@@ -173,7 +173,7 @@ if TAB_REG:
             
             c_izq, c_centro, c_der = st.columns([1, 2, 1])
             with c_centro:
-            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+                submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit_button:
             lt_total = l_cisterna + l_ypf
