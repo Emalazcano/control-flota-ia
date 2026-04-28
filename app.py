@@ -129,7 +129,10 @@ if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
         # Lógica de precarga
-        movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_reg")
+        col_sel, col_espacio = st.columns([1, 3]) # [1, 3] significa que el selector ocupa 1/4 del ancho
+        
+        with col_sel:
+            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_reg")
         idx_marca, idx_chofer, km_sugerido = 0, 0, 0
         traza_ex = ["➕ NUEVA"]
         
