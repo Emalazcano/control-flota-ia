@@ -64,6 +64,15 @@ if "precio_gasoil" not in st.session_state: st.session_state["precio_gasoil"] = 
 if "umbral_consumo" not in st.session_state: st.session_state["umbral_consumo"] = 35.0
 
 # Funciones de datos
+@st.cache_data(ttl=600) # Se refrescará automáticamente cada 10 minutos
+def cargar_historial():
+    try:
+        # Asumiendo que 'conn' es tu conexión a GSheets
+        df = conn.read(spreadsheet=URL, ttl=0)
+        return df
+    except: 
+        return pd.DataFrame()
+
 def cargar_lista_choferes():
     try: return sorted(pd.read_excel("choferes.xlsx").iloc[:, 0].dropna().unique().tolist())
     except: return []
@@ -178,6 +187,15 @@ if TAB_REG:
         if submit_button:
             lt_total = l_cisterna + l_ypf
             dist_v = max(0, int(kmf - kmi))
+            # NUEVA VALIDACIÓN:
+        if kmf <= kmi:
+            st.error("⚠️ Error: El KM Final debe ser mayor al KM Inicial.")
+        elif dist_v == 0:
+            st.warning("⚠️ Atención: El recorrido es 0 KM, revisa los datos.")
+        else:
+            # AQUÍ va todo tu bloque de guardado original (pd.concat, guardar_historial, etc.)
+            st.success("✅ Registro validado y guardado correctamente.")
+            st.rerun()
             
             if kmf <= kmi: st.error("⚠️ El KM Final debe ser mayor al Inicial.")
             elif lt_total <= 0: st.error("⚠️ La suma de litros debe ser mayor a 0.")
@@ -205,28 +223,32 @@ if TAB_REG:
                 st.rerun()
 
 # ─────────────────────────────────────────────
-# 2. TAB HISTORIAL (Corregido: Aislado)
+# 2. TAB HISTORIAL (Corregido y optimizado)
 # ─────────────────────────────────────────────
 with TAB_HIST:
     st.subheader("📋 Historial de Registros")
+    # Usamos la función optimizada con caché
+    df_h = cargar_historial() 
+    
     if not df_h.empty:
-        # Agregamos un toggle para controlar el filtro (apagado por defecto)
-        filtro_activado = st.toggle("Filtrar por móvil seleccionado", value=False)
+        # Toggle: por defecto False (ve todo el historial)
+        filtrar = st.toggle("Filtrar solo por el móvil seleccionado", value=False)
         
-        if filtro_activado:
+        if filtrar:
             movil_sel = st.session_state.get("movil_reg", 1)
             df_to_show = df_h[df_h["Movil"] == int(movil_sel)]
-            st.write(f"Mostrando historial del móvil: {movil_sel}")
+            st.caption(f"Mostrando solo móvil: {movil_sel}")
         else:
             df_to_show = df_h
-            st.write("Mostrando todo el historial de la flota.")
+            st.caption("Mostrando historial completo de la flota")
             
-        st.dataframe(df_to_show.sort_values("Fecha", ascending=False), use_container_width=True)
+        st.dataframe(
+            df_to_show.sort_values("Fecha", ascending=False), 
+            use_container_width=True,
+            hide_index=True
+        )
     else:
         st.info("No hay datos cargados.")
-
-# --- AQUÍ IRÍAN EL RESTO DE TUS TABS (HALCON, IA, ANA, COSTOS, PDF) ---
-# Copia y pega el resto de tu código original desde aquí hacia abajo...
 # ─────────────────────────────────────────────
 # TAB: OJO DE HALCÓN
 # ─────────────────────────────────────────────
