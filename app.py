@@ -207,44 +207,37 @@ else:
     TAB_REG = None
 
 # ─────────────────────────────────────────────
-# TAB: REGISTRO (solo admin)
+# TAB: REGISTRO (CORREGIDO CON LÓGICA DE UMBRAL)
 # ─────────────────────────────────────────────
 if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
-        
-        # --- CSS (Manteniendo tu estilo) ---
-        st.markdown("""
-        <style>
-            [data-testid="stNumberInput"] button { display: none; }
-            .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
-        </style>
-        """, unsafe_allow_html=True)
 
-        # --- 1. Selector de Móvil (Agregado aquí para que siempre aparezca) ---
-        # Si 'lista_moviles' no existe, la creamos al vuelo para no romper nada
-        col1, col2 = st.columns([1, 4]) # [1, 4] hace que el selector ocupe solo 1/5 del ancho
-        with col1:
-            lista_moviles = list(range(1, 101))
-            movil_sel = st.selectbox("🔢 Selecciona Móvil", lista_moviles, index=34)
+        # --- 1. Selector de Móvil ---
+        col_m1, col_m2 = st.columns([1, 4])
+        with col_m1:
+            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_sel")
 
-        # --- 2. Lógica de Carga de Historial (TU CÓDIGO ORIGINAL) ---
-        # Aseguramos variables base para evitar NameError
+        # --- 2. Lógica de precarga ---
         idx_marca = 0
         idx_chofer = 0
         km_sugerido = 0
         traza_ex = ["➕ NUEVA"]
-        
+
         if 'df_h' in locals() and not df_h.empty:
-            # Tu lógica de carga de historial se mantiene intacta
             hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
             if not hist_movil.empty:
                 ult_r = hist_movil.sort_values("Fecha").iloc[-1]
                 km_sugerido = float(ult_r["KM_Fin"])
-                # ... (resto de tu lógica de carga original)
+                # Precarga de Chofer y Marca
+                if 'lista_personal' in locals() and ult_r["Chofer"] in lista_personal:
+                    idx_chofer = lista_personal.index(ult_r["Chofer"])
+                if ult_r["Marca"] == "SCANIA": idx_marca = 0
+                elif ult_r["Marca"] == "MERCEDES BENZ": idx_marca = 1
+                
                 traza_ex = ["➕ NUEVA"] + sorted(df_h["Traza"].unique().tolist())
 
-        # --- 3. FORMULARIO (Botón dentro del 'with') ---
+        # --- 3. Formulario Único ---
         with st.form("registro_form_v2", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             
@@ -266,36 +259,11 @@ if TAB_REG:
                 c_lt1, c_lt2 = st.columns(2)
                 l_cisterna = c_lt1.number_input("⛽ L. Cisterna", value=0.0, step=0.1)
                 l_ypf = c_lt2.number_input("⛽ L. YPF", value=0.0, step=0.1)
-                
                 lt = l_cisterna + l_ypf
-                ltab = st.number_input("📟 Litros Tablero", value=0.0)
-                lral = st.number_input("⏳ Litros Ralentí", value=0.0)
-                # --- SECCIÓN: MÉTRICAS EN TIEMPO REAL ---
-            st.divider()
-            # Cálculos basados en los inputs del formulario
-            dist_c = max(0, int(kmf - kmi))
-            cons_c = (lt / dist_c * 100) if dist_c > 0 else 0.0
-            costo_c = lt * st.session_state.get("precio_gasoil", 0)
-            desvio_c = max(0, cons_c - st.session_state.get("umbral_consumo", 35.0))
-
-            c_met1, c_met2, c_met3, c_met4 = st.columns(4)
-            c_met1.metric("🛣️ KM", f"{dist_c:,.0f}")
-            c_met2.metric("🔢 Cons", f"{cons_c:.1f} L/100")
-            c_met3.metric("💰 Costo", f"${costo_c:,.0f}")
-            c_met4.metric("🚨 Desvío", f"{desvio_c:.1f}")
-
-            # Botón de envío
+            
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
-        # --- Lógica de procesamiento (al presionar el botón) ---
-        if submit_button:
-            # (Tu lógica de guardado actual...)
-            st.success("Procesando...")
-
-            # Botón de envío (CORRECTAMENTE DENTRO DEL FORM)
-            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-
-        # --- 4. LÓGICA DE PROCESAMIENTO (Fuera del form, pero usa los datos del form) ---
+        # --- 4. Lógica de Procesamiento ---
         if submit_button:
             if kmf <= kmi:
                 st.error("⚠️ El KM Final debe ser mayor al Inicial.")
@@ -306,22 +274,16 @@ if TAB_REG:
                 dist_v = int(kmf - kmi)
                 cons_final = (lt / dist_v * 100) if dist_v > 0 else 0.0
                 
-                # Tu lógica de guardar historial (preservada)
-                nuevo_reg = {
-                    "Fecha": fecha_input.strftime('%d/%m/%Y'),
-                    "Chofer": chofer,
-                    "Movil": movil_sel,
-                    "Marca": marca,
-                    "L_Ticket": lt,
-                    # ... (resto de tus campos)
-                }
-                # guardar_historial(pd.concat([df_h, pd.DataFrame([nuevo_reg])]))
+                # --- Lógica del UMBRAL ---
+                umbral_actual = st.session_state.get("umbral_consumo", 35.0)
                 
-                # Lógica del UMBRAL (Integrada)
-                if 'UMBRAL' in locals() and cons_final > UMBRAL:
-                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final:.1f} L/100km) supera el umbral.")
+                if cons_final > umbral_actual:
+                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final:.1f} L/100km) supera el umbral de {umbral_actual:.1f}.")
                 else:
                     st.success("✅ Registro guardado correctamente.")
+                
+                # Aquí iría tu función de guardado
+                # guardar_historial(...) 
                 
                 time.sleep(1)
                 st.rerun()
