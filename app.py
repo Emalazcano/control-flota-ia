@@ -122,11 +122,26 @@ def cargar_historial():
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         if 'Fecha' in df.columns:
-            # FIX: extraemos solo la parte de fecha para evitar problemas con horas
-            df['Fecha'] = df['Fecha'].astype(str).str.extract(r'(\d{2}/\d{2}/\d{4})')[0]
-            df['Fecha'] = pd.to_datetime(df['Fecha'], format='%d/%m/%Y', errors='coerce')
-            df['Fecha'] = df['Fecha'].dt.normalize()
-            df['Fecha'] = df['Fecha'].fillna(pd.Timestamp.today().normalize())
+            def parsear_fecha(val):
+                if pd.isna(val):
+                    return pd.NaT
+                s = str(val).strip()
+                # Intenta DD/MM/YYYY
+                for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d'):
+                    try:
+                        return pd.to_datetime(s[:10], format=fmt)
+                    except:
+                        continue
+                # Último recurso: pandas infiere
+                try:
+                    return pd.to_datetime(s, dayfirst=True, errors='coerce')
+                except:
+                    return pd.NaT
+
+            df['Fecha'] = df['Fecha'].apply(parsear_fecha)
+            # FIX: NaT se deja como NaT, NO se rellena con hoy
+            # así podés identificar registros con fecha problemática
+            df = df.dropna(subset=['Fecha'])
 
         return df
     except Exception as e:
