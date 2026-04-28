@@ -140,6 +140,17 @@ def cargar_historial():
 
             df['Fecha'] = df['Fecha'].apply(parsear_fecha)
             # FIX: NaT se deja como NaT, NO se rellena con hoy
+            cols_int = ["Movil", "KM_Ini", "KM_Fin", "KM_Recorr"]
+            cols_float = ["L_Ticket", "L_Cisterna", "L_YPF", "L_Tablero", "L_Ralenti",
+                          "Consumo_L100", "Costo_Total_ARS", "Desvio_Neto"]
+            for col in cols_int:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+
+for col in cols_float:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).round(3)
+
             # así podés identificar registros con fecha problemática
             df = df.dropna(subset=['Fecha'])
 
