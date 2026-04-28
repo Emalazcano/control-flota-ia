@@ -304,6 +304,7 @@ if TAB_REG:
                 
                 time.sleep(1)
                 st.rerun()
+
 # ─────────────────────────────────────────────
 # TAB: OJO DE HALCÓN
 # ─────────────────────────────────────────────
@@ -392,98 +393,6 @@ with TAB_HALCON:
                 "Litros_Totales": st.column_config.NumberColumn("Litros", format="%.1f"),
             }
         )
-
-if TAB_REG:
-    with TAB_REG:
-        st.subheader("📝 Nuevo Registro")
-
-        # --- CSS (Estilos) ---
-        st.markdown("""
-        <style>
-            [data-testid="stNumberInput"] button { display: none; }
-            .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
-        </style>
-        """, unsafe_allow_html=True)
-
-        # --- 1. Selector de Móvil (Compacto) ---
-        # Usamos columnas para controlar el ancho
-        col_m1, col_m2 = st.columns([1, 4])
-        with col_m1:
-            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_unico")
-
-        # --- 2. Lógica de Carga de Historial ---
-        # Valores iniciales seguros
-        idx_marca = 0
-        idx_chofer = 0
-        km_sugerido = 0
-        traza_ex = ["➕ NUEVA"]
-
-        # Lógica para pre-seleccionar datos del último registro
-        if 'df_h' in locals() and not df_h.empty:
-            hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
-            if not hist_movil.empty:
-                ult_r = hist_movil.sort_values("Fecha").iloc[-1]
-                km_sugerido = float(ult_r["KM_Fin"])
-
-                # Pre-selección de Chofer (busca en tu lista_personal)
-                if 'lista_personal' in locals() and ult_r["Chofer"] in lista_personal:
-                    idx_chofer = lista_personal.index(ult_r["Chofer"])
-
-                # Pre-selección de Marca (0 para SCANIA, 1 para MERCEDES)
-                if ult_r["Marca"] == "SCANIA": idx_marca = 0
-                elif ult_r["Marca"] == "MERCEDES BENZ": idx_marca = 1
-
-                traza_ex = ["➕ NUEVA"] + sorted(df_h["Traza"].unique().tolist())
-
-        # --- 3. Formulario ---
-        with st.form("registro_form_v2", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-
-            with c1:
-                marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], index=idx_marca, horizontal=True)
-                chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
-                fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
-
-            with c2:
-                ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-                traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-                nt = st.text_input("✍️ Nombre Nueva Traza").upper()
-                t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
-
-            with c3:
-                kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1)
-                kmf = st.number_input("🏁 KM Final", value=0, step=1)
-                
-                c_lt1, c_lt2 = st.columns(2)
-                l_cisterna = c_lt1.number_input("⛽ L. Cisterna", value=0.0, step=0.1)
-                l_ypf = c_lt2.number_input("⛽ L. YPF", value=0.0, step=0.1)
-                
-                lt = l_cisterna + l_ypf
-                ltab = st.number_input("📟 Litros Tablero", value=0.0)
-                lral = st.number_input("⏳ Litros Ralentí", value=0.0)
-
-            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
-
-        # --- 4. Procesamiento al guardar ---
-        if submit_button:
-            if kmf <= kmi:
-                st.error("⚠️ El KM Final debe ser mayor al Inicial.")
-            elif lt <= 0:
-                st.error("⚠️ Los litros deben ser mayores a 0.")
-            else:
-                dist_v = int(kmf - kmi)
-                cons_final = (lt / dist_v * 100) if dist_v > 0 else 0.0
-
-                # (Aquí iría tu función de guardado `guardar_historial(...)`)
-                
-                # Validación de umbral
-                if 'UMBRAL' in locals() and cons_final > UMBRAL:
-                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final:.1f} L/100km) supera el umbral.")
-                else:
-                    st.success("✅ Registro guardado correctamente.")
-                
-                time.sleep(1)
-                st.rerun()
 
 # ─────────────────────────────────────────────
 # TAB: ANALÍTICA
@@ -797,4 +706,3 @@ with TAB_PDF:
                         mime      = "application/pdf",
                         use_container_width=True
                     )
-                    
