@@ -212,6 +212,25 @@ else:
 if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
+        # Verificación de seguridad
+        if 'df_h' in locals() and not df_h.empty:
+            # Selector de visualización
+            filtro_on = st.toggle("Filtrar por móvil seleccionado", value=True)
+            
+            if filtro_on:
+                movil_actual = st.session_state.get("movil_reg", 1)
+                # Convertimos a string para asegurar coincidencia
+                df_filtro = df_h[df_h["Movil"].astype(str) == str(movil_actual)]
+                
+                if not df_filtro.empty:
+                    st.dataframe(df_filtro.sort_values("Fecha", ascending=False), use_container_width=True)
+                else:
+                    st.warning(f"No hay registros cargados para el móvil {movil_actual}.")
+            else:
+                # Ver todo
+                st.dataframe(df_h.sort_values("Fecha", ascending=False), use_container_width=True)
+        else:
+            st.warning("El historial está vacío o no se pudo cargar la conexión.")    
         
         # 1. Selector de Móvil
         col_m1, col_m2 = st.columns([1, 4])
