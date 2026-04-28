@@ -152,6 +152,24 @@ if TAB_REG:
                 l_ypf = st.number_input("⛽ L. YPF", value=0.0, step=0.1)
                 ltab = st.number_input("📟 L. Tablero", value=0.0, step=0.1)
                 lral = st.number_input("⏳ L. Ralentí", value=0.0, step=0.1)
+                # --- CÁLCULOS EN TIEMPO REAL ---
+            st.divider()
+            lt_total = l_cisterna + l_ypf
+            dist_v = max(0, int(kmf - kmi))
+            
+            # Cálculo de promedio (evitando división por cero)
+            cons_final = (lt_total / dist_v * 100) if dist_v > 0 else 0.0
+            
+            # Cálculo de costo y desvío usando el session_state (fuente de verdad)
+            costo_c = lt_total * st.session_state.get("precio_gasoil", 2065.0)
+            desvio_c = max(0, cons_final - st.session_state.get("umbral_consumo", 35.0))
+
+            # Visualización de métricas
+            c_met1, c_met2, c_met3, c_met4 = st.columns(4)
+            c_met1.metric("🛣️ KM", f"{dist_v:,.0f}")
+            c_met2.metric("🔢 Promedio", f"{cons_final:.1f} L/100")
+            c_met3.metric("💰 Costo", f"${costo_c:,.0f}")
+            c_met4.metric("🚨 Desvío", f"{desvio_c:.1f}")
             
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO")
 
