@@ -91,9 +91,18 @@ def cargar_historial():
     except: return pd.DataFrame()
 
 def guardar_historial(df_nuevo):
-    df_save = df_nuevo.copy()
-    df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
-    conn.update(spreadsheet=URL, data=df_save)
+    try:
+        st.write("DEBUG: Intentando guardar en Google Sheets...")
+        st.write(f"DEBUG: Filas a guardar: {len(df_nuevo)}")
+        
+        # Intentar guardar
+        conn.update(spreadsheet=URL, data=df_nuevo)
+        
+        st.success("✅ ¡Datos guardados exitosamente!")
+    except Exception as e:
+        st.error(f"❌ FALLÓ EL GUARDADO. Error técnico: {e}")
+        # Esto nos mostrará el error real en pantalla, en lugar de ocultarlo
+        st.exception(e)
 
 df_h = cargar_historial()
 lista_personal = cargar_lista_choferes()
@@ -224,7 +233,8 @@ if TAB_REG:
                     "Consumo_L100": (lt_total / dist_v * 100) if dist_v > 0 else 0,
                     "Costo_Total_ARS": lt_total * st.session_state["precio_gasoil"]
                 }
-                guardar_historial(pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True))
+                df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                guardar_historial(df_final)
                 st.success("✅ Registro guardado.")
                 st.rerun()
 
