@@ -96,16 +96,20 @@ def cargar_historial():
 
 def guardar_historial(df_nuevo):
     try:
-        st.write("DEBUG: Intentando guardar en Google Sheets...")
-        st.write(f"DEBUG: Filas a guardar: {len(df_nuevo)}")
+        # Hacemos una copia para no alterar el dataframe que ves en pantalla
+        df_save = df_nuevo.copy()
         
-        # Intentar guardar
-        conn.update(spreadsheet=URL, data=df_nuevo)
+        # OBLIGATORIO: Convertimos a texto con formato exacto DD/MM/AAAA 
+        # Esto elimina la hora antes de que llegue a Google Sheets
+        if 'Fecha' in df_save.columns:
+            df_save['Fecha'] = pd.to_datetime(df_save['Fecha'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
+        
+        # Ahora sí, guardamos los datos ya formateados
+        conn.update(spreadsheet=URL, data=df_save)
         
         st.success("✅ ¡Datos guardados exitosamente!")
     except Exception as e:
         st.error(f"❌ FALLÓ EL GUARDADO. Error técnico: {e}")
-        # Esto nos mostrará el error real en pantalla, en lugar de ocultarlo
         st.exception(e)
 
 df_h = cargar_historial()
