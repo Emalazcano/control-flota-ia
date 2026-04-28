@@ -64,11 +64,14 @@ if "precio_gasoil" not in st.session_state: st.session_state["precio_gasoil"] = 
 if "umbral_consumo" not in st.session_state: st.session_state["umbral_consumo"] = 35.0
 
 # Funciones de datos
-@st.cache_data(ttl=600) # Se refrescará automáticamente cada 10 minutos
+@st.cache_data(ttl=600)
 def cargar_historial():
     try:
-        # Asumiendo que 'conn' es tu conexión a GSheets
         df = conn.read(spreadsheet=URL, ttl=0)
+        cols_int = ["Movil", "KM_Ini", "KM_Fin", "KM_Recorr", "L_Ralenti", "L_Ticket", "L_Tablero", "L_Cisterna", "L_YPF"]
+        for col in cols_int:
+            if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+        if 'Fecha' in df.columns: df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         return df
     except: 
         return pd.DataFrame()
@@ -191,14 +194,14 @@ if TAB_REG:
             lt_total = l_cisterna + l_ypf
             dist_v = max(0, int(kmf - kmi))
             # NUEVA VALIDACIÓN:
-        if kmf <= kmi:
-            st.error("⚠️ Error: El KM Final debe ser mayor al KM Inicial.")
-        elif dist_v == 0:
-            st.warning("⚠️ Atención: El recorrido es 0 KM, revisa los datos.")
-        else:
-            # AQUÍ va todo tu bloque de guardado original (pd.concat, guardar_historial, etc.)
-            st.success("✅ Registro validado y guardado correctamente.")
-            st.rerun()
+            if kmf <= kmi:
+                st.error("⚠️ Error: El KM Final debe ser mayor al KM Inicial.")
+            elif dist_v == 0:
+                st.warning("⚠️ Atención: El recorrido es 0 KM, revisa los datos.")
+            else:
+                # AQUÍ va todo tu bloque de guardado original (pd.concat, guardar_historial, etc.)
+                st.success("✅ Registro validado y guardado correctamente.")
+                st.rerun()
             
             if kmf <= kmi: st.error("⚠️ El KM Final debe ser mayor al Inicial.")
             elif lt_total <= 0: st.error("⚠️ La suma de litros debe ser mayor a 0.")
