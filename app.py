@@ -88,10 +88,17 @@ lista_personal = cargar_lista_choferes()
 
 # Sidebar
 with st.sidebar:
-    st.markdown(f"👤 **{st.session_state.get('usuario','?')}**")
-    if st.button("🚪 Cerrar sesión"):
-        for k in list(st.session_state.keys()): del st.session_state[k]
-        st.rerun()
+    st.subheader("⚙️ Configuración")
+    
+    # Inicializamos valores por defecto si no existen
+    if "umbral_consumo" not in st.session_state:
+        st.session_state["umbral_consumo"] = 35.0
+    if "precio_gasoil" not in st.session_state:
+        st.session_state["precio_gasoil"] = 2065.0
+
+    # Inputs del sidebar que actualizan el session_state
+    st.session_state["umbral_consumo"] = st.number_input("Umbral Consumo (L/100km)", value=st.session_state["umbral_consumo"])
+    st.session_state["precio_gasoil"] = st.number_input("Precio Gasoil ($)", value=st.session_state["precio_gasoil"])
 
 # ─────────────────────────────────────────────
 # ESTRUCTURA DE TABS (Corregida)
@@ -569,7 +576,7 @@ with TAB_PDF:
                         ci = cols_tabla.index('Consumo_L100')
                         for ri, row in enumerate(df_tabla.itertuples(), start=1):
                             val = getattr(row, 'Consumo_L100', 0)
-                            if val > UMBRAL:
+                            if val > st.session_state.get("umbral_consumo", 35.0):
                                 row_styles.append(('BACKGROUND', (ci, ri), (ci, ri), colors.HexColor('#421212')))
                                 row_styles.append(('TEXTCOLOR',  (ci, ri), (ci, ri), colors.HexColor('#FF4B4B')))
 
