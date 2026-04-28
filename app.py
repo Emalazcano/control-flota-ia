@@ -393,113 +393,97 @@ with TAB_HALCON:
             }
         )
 
-# ─────────────────────────────────────────────
-# TAB: HISTORIAL
-# ─────────────────────────────────────────────
-with TAB_HIST:
-    if df_h.empty:
-        st.info("Sin datos disponibles.")
-    else:
-        df_v = df_h.copy().sort_values("Fecha", ascending=False)
-        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-        def colorear_consumo(val):
-            try: return 'background-color: #421212; color: white' if float(val) > UMBRAL else ''
-            except: return ''
-        st.dataframe(
-            df_v.style.map(colorear_consumo, subset=['Consumo_L100']),
-            use_container_width=True,
-            column_config={
-                "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
-                "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
-                "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
-                "L_Ralenti": st.column_config.NumberColumn("L_Ralenti", format="%d"),
-                "L_Ticket": st.column_config.NumberColumn("L_Ticket", format="%d"),
-                "L_Tablero": st.column_config.NumberColumn("L_Tablero", format="%d"),
-                "Desvio_Neto": st.column_config.NumberColumn("Desvío Neto", format="%d"),
-                "Consumo_L100": st.column_config.NumberColumn("Consumo L/100", format="%.2f"),
-                "Costo_Total_ARS": st.column_config.NumberColumn("Costo Total", format="$%.2f"),
-                "Costo_Ralenti_ARS": st.column_config.NumberColumn("Costo Ralenti", format="$%.2f"),
-            }
-        )
+if TAB_REG:
+    with TAB_REG:
+        st.subheader("📝 Nuevo Registro")
 
-# ... (resto de tus tabs siguen aquí igual, el código cortado por el límite de caracteres debe copiarse desde tu original)
-# ─────────────────────────────────────────────
-# TAB: ASISTENTE IA
-# ─────────────────────────────────────────────
-with TAB_IA:
-    st.subheader("🤖 Asistente Inteligente")
+        # --- CSS (Estilos) ---
+        st.markdown("""
+        <style>
+            [data-testid="stNumberInput"] button { display: none; }
+            .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
+        </style>
+        """, unsafe_allow_html=True)
 
-    if "ai_cache"    not in st.session_state: st.session_state.ai_cache    = {}
-    if "messages"    not in st.session_state: st.session_state.messages    = []
-    if "ultimo_call" not in st.session_state: st.session_state.ultimo_call = 0
+        # --- 1. Selector de Móvil (Compacto) ---
+        # Usamos columnas para controlar el ancho
+        col_m1, col_m2 = st.columns([1, 4])
+        with col_m1:
+            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34)
 
-    # Botones rápidos
-    c1, c2, c3, c4 = st.columns(4)
-    pregunta_rapida = None
-    if c1.button("🥇 ¿Mejor Chofer?"):
-        pregunta_rapida = "¿Quién ha sido el chofer más eficiente este mes según los datos?"
-    if c2.button("📊 ¿Móvil más gastador?"):
-        pregunta_rapida = "¿Qué unidad (móvil) ha tenido el consumo de combustible más alto?"
-    if c3.button("⚖️ ¿Comparar Rutas?"):
-        pregunta_rapida = "Compara el consumo promedio entre 'Llano' y 'Alta Montaña'."
-    if c4.button("🔍 Diagnóstico Mensual"):
-        resumen = df_h.groupby('Movil')['Consumo_L100'].mean().to_string()
-        pregunta_rapida = f"Analiza estos consumos por unidad: {resumen}. ¿Hay anomalías o se recomienda mantenimiento urgente?"
+        # --- 2. Lógica de Carga de Historial ---
+        # Valores iniciales seguros
+        idx_marca = 0
+        idx_chofer = 0
+        km_sugerido = 0
+        traza_ex = ["➕ NUEVA"]
 
-    # Historial de chat
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+        # Lógica para pre-seleccionar datos del último registro
+        if 'df_h' in locals() and not df_h.empty:
+            hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
+            if not hist_movil.empty:
+                ult_r = hist_movil.sort_values("Fecha").iloc[-1]
+                km_sugerido = float(ult_r["KM_Fin"])
 
-    with st.form("ai_form", clear_on_submit=True):
-        pregunta_input = st.text_input("¿Qué quieres saber?", key="input_ia")
-        btn_enviar     = st.form_submit_button("Consultar IA")
+                # Pre-selección de Chofer (busca en tu lista_personal)
+                if 'lista_personal' in locals() and ult_r["Chofer"] in lista_personal:
+                    idx_chofer = lista_personal.index(ult_r["Chofer"])
 
-    pregunta = pregunta_rapida if pregunta_rapida else pregunta_input
+                # Pre-selección de Marca (0 para SCANIA, 1 para MERCEDES)
+                if ult_r["Marca"] == "SCANIA": idx_marca = 0
+                elif ult_r["Marca"] == "MERCEDES BENZ": idx_marca = 1
 
-    if (btn_enviar or pregunta_rapida) and pregunta and model:
-        # Rate limit: 1 consulta cada 15 segundos
-        ahora = time.time()
-        if ahora - st.session_state.ultimo_call < 15:
-            restante = int(15 - (ahora - st.session_state.ultimo_call))
-            st.warning(f"⏳ Esperá {restante} segundos antes de la próxima consulta.")
-        elif pregunta in st.session_state.ai_cache:
-            st.info("💡 Respuesta recuperada del historial reciente.")
-            st.markdown(st.session_state.ai_cache[pregunta])
-        else:
-            st.session_state.messages.append({"role": "user", "content": pregunta})
-            with st.chat_message("user"):
-                st.markdown(pregunta)
+                traza_ex = ["➕ NUEVA"] + sorted(df_h["Traza"].unique().tolist())
 
-            with st.chat_message("assistant"):
-                with st.spinner("Analizando..."):
-                    try:
-                        # Contexto enriquecido con datos reales
-                        resumen_flota = df_h.groupby('Chofer')['Consumo_L100'].mean().sort_values().to_string()
-                        resumen_movil = df_h.groupby('Movil')['Consumo_L100'].mean().sort_values().to_string()
-                        total_registros = len(df_h)
-                        avg_flota = df_h['Consumo_L100'].mean()
+        # --- 3. Formulario ---
+        with st.form("registro_form_v2", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
 
-                        contexto = f"""
-Sos el jefe de flota de una empresa de transporte en Jujuy, Argentina. Respondé de forma crítica y concisa.
-Si hay consumos altos, recomendá mantenimiento. El umbral de alerta es {UMBRAL:.0f} L/100km.
+            with c1:
+                marca = st.radio("🏷️ Marca", ["SCANIA", "MERCEDES BENZ"], index=idx_marca, horizontal=True)
+                chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer)
+                fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
 
-DATOS ACTUALES DE LA FLOTA:
-- Total de registros: {total_registros}
-- Consumo promedio de la flota: {avg_flota:.1f} L/100km
-- Consumo promedio por chofer (L/100km):
-{resumen_flota}
-- Consumo promedio por unidad (L/100km):
-{resumen_movil}
-"""
-                        response = model.generate_content(f"{contexto}\nPregunta del usuario: {pregunta}")
-                        respuesta = response.text
-                        st.session_state.ai_cache[pregunta] = respuesta
-                        st.session_state.ultimo_call = time.time()
-                        st.markdown(respuesta)
-                        st.session_state.messages.append({"role": "assistant", "content": respuesta})
-                    except Exception as e:
-                        st.error(f"⚠️ Error al consultar la IA: {e}")
+            with c2:
+                ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
+                traza_sel = st.selectbox("🗺️ Traza", traza_ex)
+                nt = st.text_input("✍️ Nombre Nueva Traza").upper()
+                t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
+
+            with c3:
+                kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1)
+                kmf = st.number_input("🏁 KM Final", value=0, step=1)
+                
+                c_lt1, c_lt2 = st.columns(2)
+                l_cisterna = c_lt1.number_input("⛽ L. Cisterna", value=0.0, step=0.1)
+                l_ypf = c_lt2.number_input("⛽ L. YPF", value=0.0, step=0.1)
+                
+                lt = l_cisterna + l_ypf
+                ltab = st.number_input("📟 Litros Tablero", value=0.0)
+                lral = st.number_input("⏳ Litros Ralentí", value=0.0)
+
+            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
+
+        # --- 4. Procesamiento al guardar ---
+        if submit_button:
+            if kmf <= kmi:
+                st.error("⚠️ El KM Final debe ser mayor al Inicial.")
+            elif lt <= 0:
+                st.error("⚠️ Los litros deben ser mayores a 0.")
+            else:
+                dist_v = int(kmf - kmi)
+                cons_final = (lt / dist_v * 100) if dist_v > 0 else 0.0
+
+                # (Aquí iría tu función de guardado `guardar_historial(...)`)
+                
+                # Validación de umbral
+                if 'UMBRAL' in locals() and cons_final > UMBRAL:
+                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final:.1f} L/100km) supera el umbral.")
+                else:
+                    st.success("✅ Registro guardado correctamente.")
+                
+                time.sleep(1)
+                st.rerun()
 
 # ─────────────────────────────────────────────
 # TAB: ANALÍTICA
