@@ -234,7 +234,7 @@ with TAB_HALCON:
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
-        mes_sel  = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
+        mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].dropna().unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=list(df_ana['Ruta'].unique()))
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos":
