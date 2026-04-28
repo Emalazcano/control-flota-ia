@@ -235,7 +235,7 @@ if TAB_REG:
                 }
                 df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
                 guardar_historial(df_final)
-                st.success("✅ Registro guardado.")
+                st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
                 st.rerun()
 
 # ─────────────────────────────────────────────
