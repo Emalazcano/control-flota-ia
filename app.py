@@ -24,6 +24,8 @@ import os
 # 1. CONFIGURACIÓN DE PÁGINA
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
+
+# --- BLOQUE DE LIMPIEZA (Inserta esto aquí) ---
 if "mensaje_confirmacion" in st.session_state:
     st.success(st.session_state["mensaje_confirmacion"])
     del st.session_state["mensaje_confirmacion"]
