@@ -456,7 +456,7 @@ with TAB_PDF:
         df_pdf_base['Fecha'] = pd.to_datetime(df_pdf_base['Fecha'], errors='coerce')
         df_pdf_base['Mes']   = df_pdf_base['Fecha'].dt.to_period('M').astype(str)
 
-        meses_disp = sorted(df_pdf_base['Mes'].unique().tolist(), reverse=True)
+        meses_disp = sorted(df_pdf_base['Mes'].dropna().astype(str).unique().tolist(), reverse=True)
         mes_pdf    = st.selectbox("📅 Seleccioná el mes para el reporte", meses_disp)
 
         if st.button("🖨️ Generar PDF", use_container_width=True):
