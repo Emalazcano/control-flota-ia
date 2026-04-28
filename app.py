@@ -171,7 +171,9 @@ if TAB_REG:
             c_met3.metric("💰 Costo", f"${costo_c:,.0f}")
             c_met4.metric("🚨 Desvío", f"{desvio_c:.1f}")
             
-            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO")
+            c_izq, c_centro, c_der = st.columns([1, 2, 1])
+            with c_centro:
+            submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
         if submit_button:
             lt_total = l_cisterna + l_ypf
