@@ -322,8 +322,11 @@ with TAB_ANA:
             )
             # Línea de umbral
             fig_line.add_hline(
-                y=UMBRAL, line_dash="dot", line_color="red",
-                annotation_text=f"Umbral ({UMBRAL:.0f} L/100)", annotation_position="top left"
+            y=st.session_state["umbral_consumo"], 
+            line_dash="dot", 
+            line_color="red",
+            annotation_text=f"Umbral ({st.session_state['umbral_consumo']:.0f} L/100)", 
+            annotation_position="top left"
             )
             fig_line.update_layout(hovermode="x unified")
             st.plotly_chart(fig_line, use_container_width=True)
