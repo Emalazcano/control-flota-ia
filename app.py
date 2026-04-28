@@ -225,27 +225,33 @@ if TAB_REG:
 # ─────────────────────────────────────────────
 # 2. TAB HISTORIAL (Corregido y optimizado)
 # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# 2. TAB HISTORIAL (Corregido: Visualización de fecha limpia)
+# ─────────────────────────────────────────────
 with TAB_HIST:
     st.subheader("📋 Historial de Registros")
-    # Usamos la función optimizada con caché
-    df_h = cargar_historial() 
+    df_h = cargar_historial() # Aseguramos tener los datos frescos
     
     if not df_h.empty:
-        # Toggle: por defecto False (ve todo el historial)
         filtrar = st.toggle("Filtrar solo por el móvil seleccionado", value=False)
         
         if filtrar:
             movil_sel = st.session_state.get("movil_reg", 1)
             df_to_show = df_h[df_h["Movil"] == int(movil_sel)]
-            st.caption(f"Mostrando solo móvil: {movil_sel}")
         else:
             df_to_show = df_h
-            st.caption("Mostrando historial completo de la flota")
             
+        # Configuramos la visualización de la fecha aquí
         st.dataframe(
             df_to_show.sort_values("Fecha", ascending=False), 
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            column_config={
+                "Fecha": st.column_config.DateColumn(
+                    "Fecha",
+                    format="DD/MM/YYYY" # Esto elimina el 00:00:00 visualmente
+                )
+            }
         )
     else:
         st.info("No hay datos cargados.")
