@@ -73,12 +73,11 @@ if "umbral_consumo" not in st.session_state: st.session_state["umbral_consumo"] 
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        cols_int = ["Movil", "KM_Ini", "KM_Fin", "KM_Recorr", "L_Ralenti", "L_Ticket", "L_Tablero", "L_Cisterna", "L_YPF"]
-        for col in cols_int:
-            if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
-        if 'Fecha' in df.columns: df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+        # Convertir a datetime para que se pueda ordenar
+        if 'Fecha' in df.columns:
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         return df
-    except: 
+    except:
         return pd.DataFrame()
 
 def cargar_lista_choferes():
@@ -223,6 +222,29 @@ if TAB_REG:
                 guardar_historial(df_final)
                 st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
                 st.rerun()
+# ─────────────────────────────────────────────
+# TAB: OJO DE HALCÓN
+# ─────────────────────────────────────────────
+if TAB_HIST:
+    with TAB_HIST:
+        st.subheader("📊 Historial de Cargas")
+        
+        # 1. Fuerza la recarga de datos frescos aquí
+        df_h = cargar_historial()
+        
+        if df_h.empty:
+            st.warning("No hay datos cargados todavía.")
+        else:
+            # 2. Creamos una copia para visualización sin alterar los datos originales
+            df_display = df_h.copy()
+            
+            # 3. Formateamos la fecha a texto DD/MM/AAAA solo para mostrarla
+            if 'Fecha' in df_display.columns:
+                df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
+            
+            # 4. Mostramos la tabla formateada
+            st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
+
 # ─────────────────────────────────────────────
 # TAB: OJO DE HALCÓN
 # ─────────────────────────────────────────────
