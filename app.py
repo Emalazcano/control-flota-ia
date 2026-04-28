@@ -227,27 +227,38 @@ if TAB_REG:
                 st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
                 st.rerun()
 # ─────────────────────────────────────────────
-# TAB: OJO DE HALCÓN
+# TAB HISTORIAL            
 # ─────────────────────────────────────────────
 if TAB_HIST:
     with TAB_HIST:
         st.subheader("📊 Historial de Cargas")
         
-        # 1. Fuerza la recarga de datos frescos aquí
+        # 1. Recargar datos frescos del Google Sheet
         df_h = cargar_historial()
         
         if df_h.empty:
             st.warning("No hay datos cargados todavía.")
         else:
-            # 2. Creamos una copia para visualización sin alterar los datos originales
-            df_display = df_h.copy()
+            # 2. Ordenar datos
+            df_display = df_h.sort_values("Fecha", ascending=False)
             
-            # 3. Formateamos la fecha a texto DD/MM/AAAA solo para mostrarla
-            if 'Fecha' in df_display.columns:
-                df_display['Fecha'] = df_display['Fecha'].dt.strftime('%d/%m/%Y')
-            
-            # 4. Mostramos la tabla formateada
-            st.dataframe(df_display.sort_values("Fecha", ascending=False), use_container_width=True)
+            # 3. Mostrar la tabla con formato de fecha limpio (sin horas)
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Fecha": st.column_config.DateColumn(
+                        "Fecha",
+                        format="DD/MM/YYYY"  # Esto fuerza visualmente a mostrar solo la fecha
+                    ),
+                    "KM_Ini": st.column_config.NumberColumn("KM Inicial", format="%d"),
+                    "KM_Fin": st.column_config.NumberColumn("KM Final", format="%d"),
+                    "KM_Recorr": st.column_config.NumberColumn("KM Recorrido", format="%d"),
+                    "L_Ticket": st.column_config.NumberColumn("Litros Totales", format="%.1f"),
+                    "Costo_Total_ARS": st.column_config.NumberColumn("Costo (ARS)", format="$%.2f")
+                }
+            )
 
 # ─────────────────────────────────────────────
 # TAB: OJO DE HALCÓN
