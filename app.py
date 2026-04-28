@@ -207,37 +207,35 @@ else:
     TAB_REG = None
 
 # ─────────────────────────────────────────────
-# TAB: REGISTRO (CORREGIDO CON LÓGICA DE UMBRAL)
+# TAB: REGISTRO (ÚNICA DEFINICIÓN)
 # ─────────────────────────────────────────────
 if TAB_REG:
     with TAB_REG:
         st.subheader("📝 Nuevo Registro")
-
-        # --- 1. Selector de Móvil ---
+        
+        # 1. Selector de Móvil
         col_m1, col_m2 = st.columns([1, 4])
         with col_m1:
-            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_sel")
+            movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_reg")
 
-        # --- 2. Lógica de precarga ---
+        # 2. Lógica de precarga
         idx_marca = 0
         idx_chofer = 0
         km_sugerido = 0
         traza_ex = ["➕ NUEVA"]
-
+        
         if 'df_h' in locals() and not df_h.empty:
             hist_movil = df_h[df_h["Movil"] == int(movil_sel)]
             if not hist_movil.empty:
                 ult_r = hist_movil.sort_values("Fecha").iloc[-1]
                 km_sugerido = float(ult_r["KM_Fin"])
-                # Precarga de Chofer y Marca
                 if 'lista_personal' in locals() and ult_r["Chofer"] in lista_personal:
                     idx_chofer = lista_personal.index(ult_r["Chofer"])
                 if ult_r["Marca"] == "SCANIA": idx_marca = 0
                 elif ult_r["Marca"] == "MERCEDES BENZ": idx_marca = 1
-                
                 traza_ex = ["➕ NUEVA"] + sorted(df_h["Traza"].unique().tolist())
 
-        # --- 3. Formulario Único ---
+        # 3. Formulario
         with st.form("registro_form_v2", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             
@@ -256,34 +254,56 @@ if TAB_REG:
                 kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1)
                 kmf = st.number_input("🏁 KM Final", value=0, step=1)
                 
+                # Litros Cisterna e YPF
                 c_lt1, c_lt2 = st.columns(2)
                 l_cisterna = c_lt1.number_input("⛽ L. Cisterna", value=0.0, step=0.1)
                 l_ypf = c_lt2.number_input("⛽ L. YPF", value=0.0, step=0.1)
                 lt = l_cisterna + l_ypf
+                
+                # Litros Tablero y Ralentí
+                c_tab1, c_tab2 = st.columns(2)
+                ltab = c_tab1.number_input("📟 L. Tablero", value=0.0, step=0.1)
+                lral = c_tab2.number_input("⏳ L. Ralentí", value=0.0, step=0.1)
             
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
-        # --- 4. Lógica de Procesamiento ---
+        # 4. Procesamiento
         if submit_button:
             if kmf <= kmi:
                 st.error("⚠️ El KM Final debe ser mayor al Inicial.")
             elif lt <= 0:
-                st.error("⚠️ Los litros deben ser mayores a 0.")
+                st.error("⚠️ Los litros totales deben ser mayores a 0.")
             else:
                 # Cálculos
                 dist_v = int(kmf - kmi)
                 cons_final = (lt / dist_v * 100) if dist_v > 0 else 0.0
                 
-                # --- Lógica del UMBRAL ---
-                umbral_actual = st.session_state.get("umbral_consumo", 35.0)
+                # Diccionario para guardar
+                nuevo_reg = {
+                    "Fecha": fecha_input.strftime('%d/%m/%Y'),
+                    "Chofer": chofer,
+                    "Movil": int(movil_sel),
+                    "Marca": marca,
+                    "Ruta": ruta_tipo,
+                    "Traza": t_final,
+                    "KM_Ini": int(kmi),
+                    "KM_Fin": int(kmf),
+                    "KM_Recorr": dist_v,
+                    "L_Ticket": lt,
+                    "L_Tablero": ltab,
+                    "L_Ralenti": lral,
+                    "Consumo_L100": cons_final,
+                    "Costo_Total_ARS": lt * st.session_state["precio_gasoil"]
+                }
                 
-                if cons_final > umbral_actual:
-                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final:.1f} L/100km) supera el umbral de {umbral_actual:.1f}.")
+                # Guardar y forzar recarga
+                df_actualizado = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+                guardar_historial(df_actualizado)
+                
+                if cons_final > UMBRAL:
+                    st.warning(f"⚠️ Registro guardado, pero el consumo ({cons_final:.1f} L/100km) supera el umbral.")
                 else:
                     st.success("✅ Registro guardado correctamente.")
-                
-                # Aquí iría tu función de guardado
-                # guardar_historial(...) 
                 
                 time.sleep(1)
                 st.rerun()
