@@ -207,7 +207,7 @@ if TAB_REG:
 
         # 3. Lógica única de procesamiento al hacer clic
         if submit_button:
-            else:
+        else:
                 # Calculamos el consumo primero
                 consumo_calculado = (lt_total / dist_v * 100) if dist_v > 0 else 0
                 umbral = st.session_state.get("umbral_consumo", 35.0)
