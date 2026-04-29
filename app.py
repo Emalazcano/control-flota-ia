@@ -229,7 +229,7 @@ with tabs[0]:
         conn.update(spreadsheet=URL, data=df_final)
         st.success("✅ Guardado."); time.sleep(1); st.rerun()
 
-# --- TAB 1: OJO DE HALCÓN (MEJORADO) ---
+# --- TAB 1: OJO DE HALCÓN (VERSIÓN CORREGIDA Y COMPACTA) ---
 with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
@@ -238,64 +238,41 @@ with tabs[1]:
         
         st.markdown("### 🔍 Filtros de Auditoría")
         c_f1, c_f2 = st.columns(2)
-        mes_sel = c_f1.selectbox("📅 Mes a Analizar", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
-        ruta_sel = c_f2.multiselect("🏔️ Tipo de Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
+        mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
+        ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
         
-        # Aplicar filtros
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos": 
             df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
 
-        # --- LÓGICA DE DETECCIÓN DE ANOMALÍAS (HISTÓRICO) ---
-        # Calculamos el promedio histórico de cada móvil de toda la base de datos
+        # --- LÓGICA DE BENCHMARK ---
         df_bench_movil = df_h.groupby("Movil")["Consumo_L100"].mean().reset_index()
         df_bench_movil.rename(columns={"Consumo_L100": "Promedio_Historico"}, inplace=True)
-        
-        # Unimos con los datos actuales filtrados para comparar
         df_anomalias = df_filtrado.merge(df_bench_movil, on="Movil", how="left")
-        # Calculamos qué tan lejos está el consumo actual de su promedio (en %)
         df_anomalias["Exceso_Pct"] = ((df_anomalias["Consumo_L100"] / df_anomalias["Promedio_Historico"]) - 1) * 100
 
-        # --- VISUALIZACIÓN ---
-        st.subheader("🏆 Ranking de Eficiencia (Promedio L/100)")
+        st.divider()
+
+        # --- RANKING DE EFICIENCIA ---
+        st.subheader("🏆 Mejores Choferes (L/100)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
             with cols[i]:
-                st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div style="font-size:24px">{medallas[i]}</div>
+                        <div style="font-weight:bold; font-size:14px; margin-top:5px;">{row['Chofer']}</div>
+                        <div style="color:#4CAF50; font-size:20px; font-weight:bold;">{row['Consumo_L100']:.1f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
         st.divider()
 
-        # --- SECCIÓN 1: DESVÍOS NETOS (TICKET VS TABLERO) ---
-        st.subheader("⚠️ Auditoría de Desvíos Netos")
-        st.caption("Diferencia acumulada entre Litros Ticket y (Litros Tablero + Ralentí)")
-        
-        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
-        df_desv = df_desv.sort_values("Desvio_Neto", ascending=False)
-
-        for _, row in df_desv.iterrows():
-            if row["Desvio_Neto"] > 50:
-                clase_css = "desvio-critico"
-                etiqueta = "🚨 CRÍTICO (>50L)"
-            elif row["Desvio_Neto"] > 20:
-                clase_css = "desvio-advertencia"
-                etiqueta = "⚠️ ADVERTENCIA (>20L)"
-            else:
-                continue # No mostramos desvíos menores para limpiar la vista
-
-            st.markdown(f'''
-                <div class="desvio-item {clase_css}">
-                    <div><b>{row["Chofer"]}</b><br><small>{etiqueta}</small></div>
-                    <div style="text-align:right;"><b>{row["Desvio_Neto"]:.1f} L</b></div>
-                </div>
-            ''', unsafe_allow_html=True)
-
-        st.divider()
-
-# --- SECCIÓN 2: CARGAS SOSPECHOSAS (CORREGIDO) ---
+        # --- SECCIÓN: CARGAS SOSPECHOSAS (DISEÑO HORIZONTAL ROBUSTO) ---
         st.subheader("🕵️ Detección de Cargas Sospechosas")
-        st.caption("Viajes con consumo >15% del promedio habitual del móvil")
+        st.caption("Viajes con consumo >15% sobre el promedio habitual")
 
         sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
 
@@ -303,53 +280,37 @@ with tabs[1]:
             st.success("✅ No se detectaron anomalías.")
         else:
             for _, s in sospechosos.iterrows():
-                # Color dinámico según gravedad
                 color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
-                traza_display = s.get('Traza', 'Sin Traza')
-                fecha_str = s['Fecha'].strftime('%d/%m/%Y') if hasattr(s['Fecha'], 'strftime') else str(s['Fecha'])
+                traza_txt = s.get('Traza', 'N/D')
+                fecha_txt = s['Fecha'].strftime('%d/%m/%Y')
 
-                # Renderizado de la tarjeta
+                # Usamos una estructura de Markdown más simple para evitar errores de renderizado
                 st.markdown(f"""
-                    <div style="
-                        background-color: #1e2130;
-                        border-radius: 10px;
-                        padding: 15px;
-                        margin-bottom: 10px;
-                        border-left: 6px solid {color_alerta};
-                        border-top: 1px solid #3d425a;
-                        border-right: 1px solid #3d425a;
-                        border-bottom: 1px solid #3d425a;
-                    ">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                            <div style="flex: 2;">
-                                <div style="color: #aab; font-size: 0.75rem; text-transform: uppercase;">
-                                    Unidad {int(s['Movil'])} • {fecha_str}
-                                </div>
-                                <div style="font-weight: bold; color: white; font-size: 1.1rem; margin-top: 2px;">
-                                    {s['Chofer']}
-                                </div>
-                                <div style="color: #4CAF50; font-size: 0.85rem; margin-top: 5px;">
-                                    📍 {s['Ruta']} <span style="color: #555;">|</span> <span style="color: #9ab;">{traza_display}</span>
-                                </div>
-                            </div>
-                            
-                            <div style="flex: 1; text-align: center; border-left: 1px solid #3d425a; border-right: 1px solid #3d425a; padding: 0 10px;">
-                                <div style="color: #aab; font-size: 0.7rem;">CONSUMO</div>
-                                <div style="font-weight: bold; color: white; font-size: 1.2rem;">{s['Consumo_L100']:.1f}</div>
-                                <div style="font-size: 0.75rem; color: #666;">Hab: {s['Promedio_Historico']:.1f}</div>
-                            </div>
-                            
-                            <div style="flex: 0.8; text-align: right;">
-                                <div style="color: {color_alerta}; font-size: 1.3rem; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
-                                <div style="color: #aab; font-size: 0.7rem; font-weight: bold;">EXCESO</div>
-                            </div>
-                        </div>
-                    </div>
+                <div style="background-color: #1e2130; border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 5px solid {color_alerta};">
+                    <table style="width:100%; border:none; border-collapse:collapse;">
+                        <tr>
+                            <td style="width:50%; vertical-align:top;">
+                                <div style="color: #aab; font-size: 11px;">UNIDAD {int(s['Movil'])} • {fecha_txt}</div>
+                                <div style="font-weight: bold; color: white; font-size: 15px;">{s['Chofer']}</div>
+                                <div style="color: #4CAF50; font-size: 12px;">📍 {s['Ruta']} | <span style="color:#9ab;">{traza_txt}</span></div>
+                            </td>
+                            <td style="width:30%; text-align:center; border-left: 1px solid #3d425a; border-right: 1px solid #3d425a;">
+                                <div style="color: #aab; font-size: 10px;">CONSUMO</div>
+                                <div style="font-weight: bold; color: white; font-size: 16px;">{s['Consumo_L100']:.1f}</div>
+                                <div style="color: #666; font-size: 11px;">Hab: {s['Promedio_Historico']:.1f}</div>
+                            </td>
+                            <td style="width:20%; text-align:right; padding-left:10px;">
+                                <div style="color: {color_alerta}; font-size: 18px; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
+                                <div style="color: #aab; font-size: 10px;">EXCESO</div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
                 """, unsafe_allow_html=True)
-                
-                # Botón de acción (opcional, fuera del HTML para que funcione)
-                msg_wa = f"Hola {s['Chofer']}, se detectó un exceso del {s['Exceso_Pct']:.1f}% en la unidad {int(s['Movil'])} ({s['Ruta']})."
-                st.link_button(f"📲 Notificar a {s['Chofer']}", f"https://wa.me/?text={msg_wa.replace(' ', '%20')}", use_container_width=True)
+
+                # Botón de WhatsApp debajo de la tarjeta (fuera del HTML para evitar fallos)
+                msg = f"Auditoría Unidad {int(s['Movil'])}: Consumo de {s['Consumo_L100']:.1f} L/100 en ruta {s['Ruta']} (+{s['Exceso_Pct']:.1f}% vs habitual)."
+                st.link_button(f"📲 Notificar a {s['Chofer']}", f"https://wa.me/?text={msg.replace(' ', '%20')}", use_container_width=True)
                 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
