@@ -80,13 +80,13 @@ def cargar_historial():
         df = conn.read(spreadsheet=URL, ttl=0)
         
         # 1. Aseguramos que los números sean números
-        df['Consumo_L100'] = pd.to_numeric(df['Consumo_L100'], errors='coerce')
+        df['Consumo_L100'] = pd.to_numeric(df['Consumo_L100'], errors='coerce').fillna(0)
         
         umbral = st.session_state.get("umbral_consumo", 35.0)
         
         # 2. Calculamos usando el nombre de columna EXACTO (sin tilde si así está en tu Excel)
         # Asegúrate de que el nombre aquí coincida letra por letra con tu Excel
-        df['Desvio_Neto'] = (df['Consumo_L100'] - umbral).clip(lower=0)
+        df['Desvío_Neto'] = (df['Consumo_L100'] - umbral).clip(lower=0)
         
         # Convertir a datetime para que se pueda ordenar
         if 'Fecha' in df.columns:
