@@ -270,10 +270,9 @@ with tabs[1]:
 
         st.divider()
 
-        # --- SECCIÓN: CARGAS SOSPECHOSAS (DISEÑO HORIZONTAL ROBUSTO) ---
+# --- SECCIÓN: CARGAS SOSPECHOSAS (DISEÑO ULTRA-COMPACTO) ---
         st.subheader("🕵️ Detección de Cargas Sospechosas")
-        st.caption("Viajes con consumo >15% sobre el promedio habitual")
-
+        
         sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
 
         if sospechosos.empty:
@@ -282,35 +281,46 @@ with tabs[1]:
             for _, s in sospechosos.iterrows():
                 color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
                 traza_txt = s.get('Traza', 'N/D')
-                fecha_txt = s['Fecha'].strftime('%d/%m/%Y')
+                fecha_txt = s['Fecha'].strftime('%d/%m/%y') # Formato corto para ahorrar espacio
 
-                # Usamos una estructura de Markdown más simple para evitar errores de renderizado
+                # Tarjeta en una sola fila con Flexbox
                 st.markdown(f"""
-                <div style="background-color: #1e2130; border-radius: 8px; padding: 12px; margin-bottom: 10px; border-left: 5px solid {color_alerta};">
-                    <table style="width:100%; border:none; border-collapse:collapse;">
-                        <tr>
-                            <td style="width:50%; vertical-align:top;">
-                                <div style="color: #aab; font-size: 11px;">UNIDAD {int(s['Movil'])} • {fecha_txt}</div>
-                                <div style="font-weight: bold; color: white; font-size: 15px;">{s['Chofer']}</div>
-                                <div style="color: #4CAF50; font-size: 12px;">📍 {s['Ruta']} | <span style="color:#9ab;">{traza_txt}</span></div>
-                            </td>
-                            <td style="width:30%; text-align:center; border-left: 1px solid #3d425a; border-right: 1px solid #3d425a;">
-                                <div style="color: #aab; font-size: 10px;">CONSUMO</div>
-                                <div style="font-weight: bold; color: white; font-size: 16px;">{s['Consumo_L100']:.1f}</div>
-                                <div style="color: #666; font-size: 11px;">Hab: {s['Promedio_Historico']:.1f}</div>
-                            </td>
-                            <td style="width:20%; text-align:right; padding-left:10px;">
-                                <div style="color: {color_alerta}; font-size: 18px; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
-                                <div style="color: #aab; font-size: 10px;">EXCESO</div>
-                            </td>
-                        </tr>
-                    </table>
+                <div style="
+                    background-color: #1e2130; 
+                    border-radius: 6px; 
+                    padding: 6px 12px; 
+                    margin-bottom: 4px; 
+                    border-left: 4px solid {color_alerta};
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                ">
+                    <div style="flex: 1.5; min-width: 0;">
+                        <div style="color: #aab; font-size: 10px; font-weight: bold;">U.{int(s['Movil'])} | {fecha_txt}</div>
+                        <div style="color: white; font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{s['Chofer']}</div>
+                    </div>
+
+                    <div style="flex: 2; padding: 0 10px; border-left: 1px solid #3d425a; border-right: 1px solid #3d425a; min-width: 0;">
+                        <div style="color: #4CAF50; font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 {s['Ruta']}</div>
+                        <div style="color: #9ab; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{traza_txt}</div>
+                    </div>
+
+                    <div style="flex: 1.2; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 15px;">
+                        <div style="text-align: center;">
+                            <div style="color: white; font-size: 14px; font-weight: bold;">{s['Consumo_L100']:.1f}</div>
+                            <div style="color: #666; font-size: 9px;">Hab: {s['Promedio_Historico']:.1f}</div>
+                        </div>
+                        <div style="text-align: right; min-width: 55px;">
+                            <div style="color: {color_alerta}; font-size: 14px; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
+                            <div style="color: #aab; font-size: 9px; font-weight: bold;">EXCESO</div>
+                        </div>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Botón de WhatsApp debajo de la tarjeta (fuera del HTML para evitar fallos)
-                msg = f"Auditoría Unidad {int(s['Movil'])}: Consumo de {s['Consumo_L100']:.1f} L/100 en ruta {s['Ruta']} (+{s['Exceso_Pct']:.1f}% vs habitual)."
-                st.link_button(f"📲 Notificar a {s['Chofer']}", f"https://wa.me/?text={msg.replace(' ', '%20')}", use_container_width=True)
+                # Botón compacto de WhatsApp
+                msg = f"Unidad {int(s['Movil'])}: {s['Consumo_L100']:.1f} L/100 (+{s['Exceso_Pct']:.1f}%)."
+                st.link_button(f"📲 Notificar", f"https://wa.me/?text={msg.replace(' ', '%20')}", use_container_width=True)
                 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
