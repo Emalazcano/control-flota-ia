@@ -228,27 +228,35 @@ with tabs[0]:
         conn.update(spreadsheet=URL, data=df_final)
         st.success("✅ Guardado."); time.sleep(1); st.rerun()
 
-# --- TAB 1: OJO DE HALCÓN ---
+# --- TAB 1: OJO DE HALCÓN (MEJORADO) ---
 with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
         df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'])
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
-        st.markdown("### 🔍 Filtros")
+        
+        st.markdown("### 🔍 Filtros de Auditoría")
         c_f1, c_f2 = st.columns(2)
-        mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
-        ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
+        mes_sel = c_f1.selectbox("📅 Mes a Analizar", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
+        ruta_sel = c_f2.multiselect("🏔️ Tipo de Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
+        
+        # Aplicar filtros
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
-        if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
-        csv = df_filtrado.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Descargar reporte filtrado (CSV)",
-            data=csv,
-            file_name='reporte_flota.csv',
-            mime='text/csv',    
-        )
-        st.divider()
-        st.subheader("🏆 Ranking de Eficiencia (Top 5)")
+        if mes_sel != "Todos": 
+            df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+
+        # --- LÓGICA DE DETECCIÓN DE ANOMALÍAS (HISTÓRICO) ---
+        # Calculamos el promedio histórico de cada móvil de toda la base de datos
+        df_bench_movil = df_h.groupby("Movil")["Consumo_L100"].mean().reset_index()
+        df_bench_movil.rename(columns={"Consumo_L100": "Promedio_Historico"}, inplace=True)
+        
+        # Unimos con los datos actuales filtrados para comparar
+        df_anomalias = df_filtrado.merge(df_bench_movil, on="Movil", how="left")
+        # Calculamos qué tan lejos está el consumo actual de su promedio (en %)
+        df_anomalias["Exceso_Pct"] = ((df_anomalias["Consumo_L100"] / df_anomalias["Promedio_Historico"]) - 1) * 100
+
+        # --- VISUALIZACIÓN ---
+        st.subheader("🏆 Ranking de Eficiencia (Promedio L/100)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
@@ -257,32 +265,55 @@ with tabs[1]:
                 st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
         st.divider()
-        st.subheader("⚠️ Ranking de Desvíos de Combustible")
-        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
-        df_desv = df_desv[df_desv['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
 
-        if df_desv.empty:
-            st.info("✅ No hay desvíos críticos.")
-        else:
-            for _, row in df_desv.iterrows():
-                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>{row["Chofer"]}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
-
-        st.divider()
-        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
-        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index()
-        df_movil = df_movil[df_movil['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
+        # --- SECCIÓN 1: DESVÍOS NETOS (TICKET VS TABLERO) ---
+        st.subheader("⚠️ Auditoría de Desvíos Netos")
+        st.caption("Diferencia acumulada entre Litros Ticket y (Litros Tablero + Ralentí)")
         
-        if df_movil.empty:
-            st.info("✅ No hay desvíos críticos.")
-        else:
-            for _, row in df_movil.iterrows():
-                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>Unidad Nº {int(row["Movil"])}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
+        df_desv = df_desv.sort_values("Desvio_Neto", ascending=False)
+
+        for _, row in df_desv.iterrows():
+            if row["Desvio_Neto"] > 50:
+                clase_css = "desvio-critico"
+                etiqueta = "🚨 CRÍTICO (>50L)"
+            elif row["Desvio_Neto"] > 20:
+                clase_css = "desvio-advertencia"
+                etiqueta = "⚠️ ADVERTENCIA (>20L)"
+            else:
+                continue # No mostramos desvíos menores para limpiar la vista
+
+            st.markdown(f'''
+                <div class="desvio-item {clase_css}">
+                    <div><b>{row["Chofer"]}</b><br><small>{etiqueta}</small></div>
+                    <div style="text-align:right;"><b>{row["Desvio_Neto"]:.1f} L</b></div>
+                </div>
+            ''', unsafe_allow_html=True)
 
         st.divider()
-        st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
-        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
-        fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
-        st.plotly_chart(fig_comp, use_container_width=True)
+
+        # --- SECCIÓN 2: CARGAS SOSPECHOSAS (COMPORTAMIENTO) ---
+        st.subheader("🕵️ Detección de Cargas Sospechosas")
+        st.caption("Viajes donde el consumo excedió más del 15% el promedio habitual del mismo móvil")
+
+        sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
+
+        if sospechosos.empty:
+            st.success("✅ No se detectaron anomalías de consumo excesivo.")
+        else:
+            for _, s in sospechosos.iterrows():
+                with st.expander(f"🚩 Unidad {int(s['Movil'])} - {s['Chofer']} (+{s['Exceso_Pct']:.1f}%)"):
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Consumo Viaje", f"{s['Consumo_L100']:.1f}")
+                    c2.metric("Habitual Unidad", f"{s['Promedio_Historico']:.1f}")
+                    c3.metric("Diferencia", f"{s['Consumo_L100'] - s['Promedio_Historico']:.1f} L", delta_color="inverse")
+                    st.info(f"**Detalles:** Fecha {s['Fecha'].strftime('%d/%m/%Y')} en ruta {s['Ruta']}. Posible exceso de carga o ralentí excesivo.")
+
+        st.divider()
+        
+        # --- DESCARGA ---
+        csv = df_filtrado.to_csv(index=False).encode('utf-8')
+        st.download_button(label="📥 Descargar Reporte Completo (CSV)", data=csv, file_name=f'auditoria_{mes_sel}.csv', mime='text/csv', use_container_width=True)
 
 # --- TAB 2: HISTORIAL ---
 with tabs[2]:
