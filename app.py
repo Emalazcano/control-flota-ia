@@ -233,12 +233,12 @@ if TAB_REG:
                 "Consumo_L100": consumo_calculado,
                 "Desvío_Neto": desvio_calculado, # <-- Esto hará que se guarde en Excel
                 "Costo_Total_ARS": lt_total * st.session_state.get("precio_gasoil", 2065.0)
-                }
+            }
                 
-                df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                guardar_historial(df_final)
-                st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
-                st.rerun()
+            df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+            guardar_historial(df_final)
+            st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
+            st.rerun()
 # ─────────────────────────────────────────────
 # TAB HISTORIAL            
 # ─────────────────────────────────────────────
