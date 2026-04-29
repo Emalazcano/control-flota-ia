@@ -206,46 +206,49 @@ if TAB_REG:
             submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
 if submit_button:
-        # --- 1. Validación (Aquí chequeas si falta algo) ---
-        if not chofer or not movil_sel:
-            st.error("Por favor completa los campos obligatorios.")
+    # --- 1. Validación ---
+    if not chofer or not movil_sel:
+        st.error("Por favor completa los campos obligatorios.")
+    
+    # --- 2. Lógica de guardado ---
+    else:
+        # --- AQUÍ ESTABA EL ERROR: Necesitas definir estas variables primero ---
+        dist_v = kmf - kmi  # Calculamos la distancia recorrida
+        lt_total = l_cisterna + l_ypf  # Calculamos el total de litros
         
-        # --- 2. El 'else' con toda la lógica ---
-        else:
-            # Cálculo de Consumo y Desvío Neto
-            consumo_calculado = (lt_total / dist_v * 100) if dist_v > 0 else 0
-            umbral = st.session_state.get("umbral_consumo", 35.0)
-            desvio_calculado = max(0, consumo_calculado - umbral)
+        # Ahora sí, podemos calcular el consumo
+        consumo_calculado = (lt_total / dist_v * 100) if dist_v > 0 else 0
+        umbral = st.session_state.get("umbral_consumo", 35.0)
+        desvio_calculado = max(0, consumo_calculado - umbral)
 
-            # Diccionario con los datos
-            nuevo_reg = {
-                "Fecha": fecha_input.strftime('%d/%m/%Y'),
-                "Chofer": chofer,
-                "Movil": int(movil_sel),
-                "Marca": marca,
-                "Ruta": ruta_tipo,
-                "Traza": t_final,
-                "KM_Ini": int(kmi),
-                "KM_Fin": int(kmf),
-                "KM_Recorr": dist_v,
-                "L_Ticket": lt_total,
-                "L_Cisterna": float(l_cisterna),
-                "L_YPF": float(l_ypf),
-                "L_Tablero": float(ltab),
-                "L_Ralenti": float(lral),
-                "Consumo_L100": consumo_calculado,
-                "Desvío_Neto": desvio_calculado,
-                "Costo_Total_ARS": lt_total * st.session_state.get("precio_gasoil", 2065.0)
-            }
+        # Diccionario con los datos
+        nuevo_reg = {
+            "Fecha": fecha_input.strftime('%d/%m/%Y'),
+            "Chofer": chofer,
+            "Movil": int(movil_sel),
+            "Marca": marca,
+            "Ruta": ruta_tipo,
+            "Traza": t_final,
+            "KM_Ini": int(kmi),
+            "KM_Fin": int(kmf),
+            "KM_Recorr": dist_v,
+            "L_Ticket": lt_total,
+            "L_Cisterna": float(l_cisterna),
+            "L_YPF": float(l_ypf),
+            "L_Tablero": float(ltab),
+            "L_Ralenti": float(lral),
+            "Consumo_L100": consumo_calculado,
+            "Desvío_Neto": desvio_calculado,
+            "Costo_Total_ARS": lt_total * st.session_state.get("precio_gasoil", 2065.0)
+        }
 
-            # Guardado y actualización
-            df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-            guardar_historial(df_final)
-            
-            # Mensaje de éxito
-            st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
-            st.rerun()
-# ─────────────────────────────────────────────
+        # Guardado y actualización
+        df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
+        guardar_historial(df_final)
+        
+        # Mensaje de éxito
+        st.session_state["mensaje_confirmacion"] = "✅ Registro guardado correctamente."
+        st.rerun()# ─────────────────────────────────────────────
 # TAB HISTORIAL            
 # ─────────────────────────────────────────────
 if TAB_HIST:
