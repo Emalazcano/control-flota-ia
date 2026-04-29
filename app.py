@@ -270,8 +270,8 @@ with tabs[1]:
 
         st.divider()
 
-# --- SECCIÓN: CARGAS SOSPECHOSAS (DISEÑO ULTRA-COMPACTO) ---
-        st.subheader("🕵️ Detección de Cargas Sospechosas")
+# --- SECCIÓN: CARGAS SOSPECHOSAS (VERSIÓN ULTRA-SLIM) ---
+        st.subheader("🕵️ Cargas Sospechosas")
         
         sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
 
@@ -281,46 +281,46 @@ with tabs[1]:
             for _, s in sospechosos.iterrows():
                 color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
                 traza_txt = s.get('Traza', 'N/D')
-                fecha_txt = s['Fecha'].strftime('%d/%m/%y') # Formato corto para ahorrar espacio
+                # Mensaje para WhatsApp
+                msg = f"Unidad {int(s['Movil'])}: {s['Consumo_L100']:.1f} L/100 (+{s['Exceso_Pct']:.1f}%)."
+                link_wa = f"https://wa.me/?text={msg.replace(' ', '%20')}"
 
-                # Tarjeta en una sola fila con Flexbox
+                # Tarjeta Ultra-Compacta
                 st.markdown(f"""
                 <div style="
                     background-color: #1e2130; 
-                    border-radius: 6px; 
-                    padding: 6px 12px; 
+                    border-radius: 4px; 
+                    padding: 4px 10px; 
                     margin-bottom: 4px; 
-                    border-left: 4px solid {color_alerta};
+                    border-left: 3px solid {color_alerta};
                     display: flex;
                     align-items: center;
-                    justify-content: space-between;
+                    gap: 12px;
                 ">
-                    <div style="flex: 1.5; min-width: 0;">
-                        <div style="color: #aab; font-size: 10px; font-weight: bold;">U.{int(s['Movil'])} | {fecha_txt}</div>
-                        <div style="color: white; font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{s['Chofer']}</div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="color: #aab; font-size: 9px; text-transform: uppercase;">U.{int(s['Movil'])} • {s['Fecha'].strftime('%d/%m')}</div>
+                        <div style="color: white; font-size: 12px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{s['Chofer']}</div>
                     </div>
 
-                    <div style="flex: 2; padding: 0 10px; border-left: 1px solid #3d425a; border-right: 1px solid #3d425a; min-width: 0;">
-                        <div style="color: #4CAF50; font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 {s['Ruta']}</div>
-                        <div style="color: #9ab; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{traza_txt}</div>
+                    <div style="flex: 2; min-width: 0; border-left: 1px solid #3d425a; padding-left: 10px;">
+                        <div style="color: #4CAF50; font-size: 10px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 {s['Ruta']}</div>
+                        <div style="color: #666; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{traza_txt}</div>
                     </div>
 
-                    <div style="flex: 1.2; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 15px;">
-                        <div style="text-align: center;">
-                            <div style="color: white; font-size: 14px; font-weight: bold;">{s['Consumo_L100']:.1f}</div>
-                            <div style="color: #666; font-size: 9px;">Hab: {s['Promedio_Historico']:.1f}</div>
+                    <div style="flex: 0.8; text-align: center; border-left: 1px solid #3d425a;">
+                        <div style="color: white; font-size: 13px; font-weight: bold;">{s['Consumo_L100']:.1f}</div>
+                        <div style="color: #666; font-size: 8px;">Hab: {s['Promedio_Historico']:.1f}</div>
+                    </div>
+
+                    <div style="flex: 0.8; display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+                        <div style="text-align: right;">
+                            <div style="color: {color_alerta}; font-size: 13px; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
+                            <div style="color: #aab; font-size: 8px; font-weight: bold;">EXCESO</div>
                         </div>
-                        <div style="text-align: right; min-width: 55px;">
-                            <div style="color: {color_alerta}; font-size: 14px; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
-                            <div style="color: #aab; font-size: 9px; font-weight: bold;">EXCESO</div>
-                        </div>
+                        <a href="{link_wa}" target="_blank" style="text-decoration: none; font-size: 18px;">📲</a>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-
-                # Botón compacto de WhatsApp
-                msg = f"Unidad {int(s['Movil'])}: {s['Consumo_L100']:.1f} L/100 (+{s['Exceso_Pct']:.1f}%)."
-                st.link_button(f"📲 Notificar", f"https://wa.me/?text={msg.replace(' ', '%20')}", use_container_width=True)
                 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
