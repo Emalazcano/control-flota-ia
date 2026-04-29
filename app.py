@@ -586,7 +586,7 @@ with TAB_PDF:
                     fig1, ax1 = plt.subplots(figsize=(10, max(3, len(df_g1) * 0.4)))
                     bar_colors = ['#FF4B4B' if v > umbral_val else '#4CAF50' for v in df_g1.values]
                     ax1.barh(df_g1.index, df_g1.values, color=bar_colors)
-                    ax1.axvline(UMBRAL, color='orange', linestyle='--', label=f'Umbral {UMBRAL:.0f}')
+                    ax1.axvline(umbral_val, color='orange', linestyle='--', label=f'Umbral {umbral_val:.0f}')
                     ax1.set_xlabel('L/100km')
                     ax1.legend()
                     ax1.set_facecolor('#1e2130')
