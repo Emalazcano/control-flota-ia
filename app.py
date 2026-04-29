@@ -309,7 +309,7 @@ with tabs[1]:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                
+
 # --- TAB 3: ASISTENTE IA ---# 
 with tabs[3]:
     st.subheader("🤖 Asistente Inteligente")
