@@ -564,7 +564,7 @@ with TAB_PDF:
                         ['Litros consumidos',         f"{total_litros:,.1f} L"],
                         ['Costo total',               f"${total_costo:,.0f} ARS"],
                         ['Consumo promedio',          f"{avg_cons:.2f} L/100km"],
-                        [f'Alertas (>{UMBRAL:.0f} L/100km)', str(alertas_mes)],
+                        [f'Alertas (>{umbral_val:.0f} L/100km)', str(alertas_mes)],
                     ]
                     t_resumen = Table(resumen_data, colWidths=[8*cm, 8*cm])
                     t_resumen.setStyle(TableStyle([
