@@ -67,7 +67,6 @@ st.markdown("""
     .desvio-item { padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3d425a; transition: transform 0.2s; }
     .desvio-item:hover { transform: scale(1.02); }
     .desvio-critico { background: #421212 !important; border: 1px solid #FF4B4B !important; }
-    .desvio-advertencia { background: #423b12 !important; border: 1px solid #FFD700 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -89,17 +88,6 @@ if "auth" not in st.session_state:
 # --- 3. CONEXIÓN Y DATOS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
-
-def crear_backup_local(df):
-    try:
-        if df is not None and not df.empty:
-            fecha_hoy = datetime.now().strftime("%Y-%m-%d_%H-%M")
-            nombre_archivo = f"backup_flota_{fecha_hoy}.csv"
-            df.to_csv(nombre_archivo, index=False, encoding='utf-8-sig')
-            return nombre_archivo
-    except:
-        pass
-    return None
 
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
@@ -132,10 +120,6 @@ def cargar_historial():
         return pd.DataFrame()
 
 df_h = cargar_historial()
-if "backup_realizado" not in st.session_state and not df_h.empty:
-    archivo = crear_backup_local(df_h)
-    if archivo:
-        st.session_state["backup_realizado"] = True
 lista_personal = cargar_lista_choferes()
 
 if not lista_personal and not df_h.empty:
@@ -229,88 +213,71 @@ with tabs[0]:
         conn.update(spreadsheet=URL, data=df_final)
         st.success("✅ Guardado."); time.sleep(1); st.rerun()
 
-# --- TAB 1: OJO DE HALCÓN (VERSIÓN ULTRA-SLIM CORREGIDA) ---
+# --- TAB 1: OJO DE HALCÓN ---
 with tabs[1]:
     if not df_h.empty:
         df_ana = df_h.copy()
         df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'])
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
-        
-        st.markdown("### 🔍 Filtros de Auditoría")
+        st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
-        
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
-        if mes_sel != "Todos": 
-            df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
-
-        # --- LÓGICA DE BENCHMARK HISTÓRICO ---
-        # Calculamos el promedio histórico por móvil para comparar
-        df_bench_movil = df_h.groupby("Movil")["Consumo_L100"].mean().reset_index()
-        df_bench_movil.rename(columns={"Consumo_L100": "Promedio_Historico"}, inplace=True)
-        
-        # Unimos con los datos filtrados
-        df_anomalias = df_filtrado.merge(df_bench_movil, on="Movil", how="left")
-        df_anomalias["Exceso_Pct"] = ((df_anomalias["Consumo_L100"] / df_anomalias["Promedio_Historico"]) - 1) * 100
-
+        if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+        csv = df_filtrado.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Descargar reporte filtrado (CSV)",
+            data=csv,
+            file_name='reporte_flota.csv',
+            mime='text/csv',    
+        )
         st.divider()
-
-        # --- RANKING DE EFICIENCIA ---
-        st.subheader("🏆 Mejores Choferes (L/100)")
+        st.subheader("🏆 Ranking de Eficiencia (Top 5)")
         top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
         cols = st.columns(5)
         medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
         for i, row in top_5.iterrows():
             with cols[i]:
-                st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
 
         st.divider()
+        st.subheader("⚠️ Ranking de Desvíos de Combustible")
+        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
+        df_desv = df_desv[df_desv['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
 
-        # --- SECCIÓN: CARGAS SOSPECHOSAS (ULTRA-SLIM) ---
-        st.subheader("🕵️ Cargas Sospechosas")
-        st.caption("Viajes con consumo >15% sobre el promedio habitual del móvil")
-
-        sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
-
-        if sospechosos.empty:
-            st.success("✅ No se detectaron anomalías.")
+        if df_desv.empty:
+            st.info("✅ No hay desvíos críticos.")
         else:
-            for _, s in sospechosos.iterrows():
-                color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
-                traza_val = str(s.get('Traza', 'N/D'))
-                fecha_val = s['Fecha'].strftime('%d/%m')
-                
-                # Pre-formatear mensaje de WhatsApp para evitar errores en el HTML
-                msg_wa = f"Unidad {int(s['Movil'])}: {s['Consumo_L100']:.1f}L/100 (+{s['Exceso_Pct']:.1f}%).".replace(' ', '%20')
-                link_wa = f"https://wa.me/?text={msg_wa}"
+            for _, row in df_desv.iterrows():
+                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>{row["Chofer"]}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
-                # Renderizado de Tarjeta Única
-                st.markdown(f"""
-                <div style="background-color: #1e2130; border-radius: 4px; padding: 6px 12px; margin-bottom: 5px; border-left: 4px solid {color_alerta}; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="color: #aab; font-size: 9px; font-weight: bold;">U.{int(s['Movil'])} | {fecha_val}</div>
-                        <div style="color: white; font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{s['Chofer']}</div>
-                    </div>
-                    <div style="flex: 1.5; min-width: 0; border-left: 1px solid #3d425a; padding-left: 10px;">
-                        <div style="color: #4CAF50; font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 {s['Ruta']}</div>
-                        <div style="color: #666; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{traza_val}</div>
-                    </div>
-                    <div style="flex: 1; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
-                        <div style="text-align: center;">
-                            <div style="color: white; font-size: 14px; font-weight: bold;">{s['Consumo_L100']:.1f}</div>
-                            <div style="color: #666; font-size: 9px;">Hab: {s['Promedio_Historico']:.1f}</div>
-                        </div>
-                        <div style="min-width: 50px;">
-                            <div style="color: {color_alerta}; font-size: 14px; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
-                            <div style="color: #aab; font-size: 9px; font-weight: bold;">EXCESO</div>
-                        </div>
-                        <a href="{link_wa}" target="_blank" style="text-decoration: none; font-size: 18px; margin-left: 5px;">📲</a>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+        st.divider()
+        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
+        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index()
+        df_movil = df_movil[df_movil['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
+        
+        if df_movil.empty:
+            st.info("✅ No hay desvíos críticos.")
+        else:
+            for _, row in df_movil.iterrows():
+                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>Unidad Nº {int(row["Movil"])}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
 
-# --- TAB 3: ASISTENTE IA ---# 
+        st.divider()
+        st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
+        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
+        fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+# --- TAB 2: HISTORIAL ---
+with tabs[2]:
+    if not df_h.empty:
+        df_v = df_h.copy().sort_values("Fecha", ascending=False)
+        # Aquí formateamos la fecha a DD/MM/YYYY para que no se vea la hora
+        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
+        st.dataframe(df_v, use_container_width=True)
+
+# --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
     st.subheader("🤖 Asistente Inteligente")
 
