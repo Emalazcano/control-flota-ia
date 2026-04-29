@@ -293,7 +293,7 @@ with tabs[1]:
 
         st.divider()
 
-        # --- SECCIÓN 2: CARGAS SOSPECHOSAS (DISEÑO AUDITORÍA CON TRAZA) ---
+# --- SECCIÓN 2: CARGAS SOSPECHOSAS (DISEÑO AUDITORÍA CON TRAZA) ---
         st.subheader("🕵️ Detección de Cargas Sospechosas")
         st.caption("Viajes con consumo >15% del promedio habitual del móvil")
 
@@ -345,7 +345,6 @@ with tabs[1]:
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
-
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
     st.subheader("🤖 Asistente Inteligente")
