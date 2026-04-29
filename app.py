@@ -293,63 +293,46 @@ with tabs[1]:
 
         st.divider()
 
-        # --- SECCIÓN 2: CARGAS SOSPECHOSAS (DISEÑO COMPACTO) ---
+# --- SECCIÓN 2: CARGAS SOSPECHOSAS (DISEÑO AUDITORÍA COMPACTO) ---
         st.subheader("🕵️ Detección de Cargas Sospechosas")
-        st.caption("Viajes con consumo >15% del promedio habitual")
+        st.caption("Viajes con consumo >15% del promedio habitual del móvil")
 
         sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
 
         if sospechosos.empty:
             st.success("✅ No se detectaron anomalías.")
         else:
-            # Usamos columnas para crear una grilla compacta (2 tarjetas por fila)
-            # En móvil Streamlit las apilará automáticamente
-            cols_sos = st.columns(2)
-            
-            for i, (_, s) in enumerate(sospechosos.iterrows()):
-                # Alternamos entre columna 1 y 2
-                with cols_sos[i % 2]:
-                    # Definimos el color según la gravedad
-                    color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
-                    
-                    st.markdown(f"""
-                        <div style="
-                            background-color: #1e2130;
-                            border-radius: 8px;
-                            padding: 12px;
-                            margin-bottom: 10px;
-                            border-left: 5px solid {color_alerta};
-                            border-right: 1px solid #3d425a;
-                            border-top: 1px solid #3d425a;
-                            border-bottom: 1px solid #3d425a;
-                        ">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <span style="font-weight: bold; color: white; font-size: 0.9em;">U. {int(s['Movil'])} - {s['Chofer']}</span>
-                                <span style="color: {color_alerta}; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</span>
-                            </div>
-                            <div style="margin-top: 8px; display: flex; justify-content: space-between;">
-                                <div>
-                                    <small style="color: #aab;">Actual</small><br>
-                                    <b style="font-size: 1.1em;">{s['Consumo_L100']:.1f}</b>
-                                </div>
-                                <div style="text-align: center;">
-                                    <small style="color: #aab;">Habitual</small><br>
-                                    <b style="color: #4CAF50;">{s['Promedio_Historico']:.1f}</b>
-                                </div>
-                                <div style="text-align: right;">
-                                    <small style="color: #aab;">Ruta</small><br>
-                                    <span style="font-size: 0.8em; font-weight: bold;">{s['Ruta'][:5]}...</span>
-                                </div>
-                            </div>
+            for _, s in sospechosos.iterrows():
+                # Color dinámico para el indicador lateral y el porcentaje
+                color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
+                
+                st.markdown(f"""
+                    <div style="
+                        background-color: #1e2130;
+                        border-radius: 10px;
+                        padding: 10px 15px;
+                        margin-bottom: 8px;
+                        border-left: 6px solid {color_alerta};
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    ">
+                        <div style="flex: 2;">
+                            <div style="color: #aab; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Unidad {int(s['Movil'])}</div>
+                            <div style="font-weight: bold; color: white; font-size: 1rem;">{s['Chofer']}</div>
+                            <div style="color: #4CAF50; font-size: 0.85rem;">📍 {s['Ruta']}</div>
                         </div>
-                    """, unsafe_allow_html=True)
-# --- TAB 2: HISTORIAL ---
-with tabs[2]:
-    if not df_h.empty:
-        df_v = df_h.copy().sort_values("Fecha", ascending=False)
-        # Aquí formateamos la fecha a DD/MM/YYYY para que no se vea la hora
-        df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
-        st.dataframe(df_v, use_container_width=True)
+                        <div style="flex: 1; text-align: center; border-left: 1px solid #3d425a; border-right: 1px solid #3d425a; margin: 0 10px;">
+                            <div style="color: #aab; font-size: 0.7rem;">CONSUMO</div>
+                            <div style="font-weight: bold; color: white;">{s['Consumo_L100']:.1f} <span style="font-size: 0.7rem; color: #aab;">L/100</span></div>
+                            <div style="font-size: 0.75rem; color: #666;">Hab: {s['Promedio_Historico']:.1f}</div>
+                        </div>
+                        <div style="flex: 0.8; text-align: right;">
+                            <div style="color: {color_alerta}; font-size: 1.1rem; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</div>
+                            <div style="color: #aab; font-size: 0.7rem;">EXCESO</div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
