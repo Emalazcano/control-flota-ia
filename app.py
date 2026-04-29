@@ -24,10 +24,9 @@ import os
 # 1. CONFIGURACIÓN DE PÁGINA
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
-
-# --- BLOQUE DE LIMPIEZA (Inserta esto aquí) ---
 if "mensaje_confirmacion" in st.session_state:
     st.success(st.session_state["mensaje_confirmacion"])
+    # Borramos la variable inmediatamente después de mostrarla para que no se repita
     del st.session_state["mensaje_confirmacion"]
 
 # (Estilos CSS sin cambios)
@@ -208,17 +207,13 @@ if TAB_REG:
 
         # 3. Lógica única de procesamiento al hacer clic
         if submit_button:
-            lt_total = l_cisterna + l_ypf
-            dist_v = max(0, int(kmf - kmi))
-            
-            # Validación
-            if kmf <= kmi:
-                st.error("⚠️ Error: El KM Final debe ser mayor al KM Inicial.")
-            elif dist_v == 0:
-                st.warning("⚠️ Atención: El recorrido es 0 KM, revisa los datos.")
-            elif lt_total <= 0:
-                st.error("⚠️ La suma de litros debe ser mayor a 0.")
-            else:
+else:
+                # Calculamos el consumo primero
+                consumo_calculado = (lt_total / dist_v * 100) if dist_v > 0 else 0
+                umbral = st.session_state.get("umbral_consumo", 35.0)
+                # Calculamos el desvío aquí para que se guarde en Excel
+                desvio_calculado = max(0, consumo_calculado - umbral)
+
                 # Guardado
                 nuevo_reg = {
                     "Fecha": fecha_input.strftime('%d/%m/%Y'),
@@ -235,7 +230,8 @@ if TAB_REG:
                     "L_YPF": float(l_ypf),
                     "L_Tablero": float(ltab),
                     "L_Ralenti": float(lral),
-                    "Consumo_L100": (lt_total / dist_v * 100) if dist_v > 0 else 0,
+                    "Consumo_L100": consumo_calculado,
+                    "Desvío_Neto": desvio_calculado, # <-- Esto hará que se guarde en Excel
                     "Costo_Total_ARS": lt_total * st.session_state.get("precio_gasoil", 2065.0)
                 }
                 
@@ -674,40 +670,4 @@ with TAB_PDF:
                     t_data.setStyle(TableStyle(row_styles))
                     story.append(t_data)
 
-    # 1. Aseguramos el filtrado antes de generar
-if st.button("🖨️ Generar PDF", key="btn_generar_pdf_final", use_container_width=True):
-    df_mes = df_pdf_base[df_pdf_base['Mes'] == mes_pdf].copy()
-
-    if df_mes.empty:
-        st.error(f"❌ No hay datos registrados para el mes {mes_pdf}.")
-    else:
-        with st.spinner("Generando reporte..."):
-            try:
-                # 1. Crear el buffer en memoria
-                buf = io.BytesIO()
-                
-                # 2. Configurar el documento
-                doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                                        rightMargin=1.5*cm, leftMargin=1.5*cm,
-                                        topMargin=1.5*cm, bottomMargin=1.5*cm)
-                story = []
-                
-                # ... (Aquí va toda tu lógica de 'story.append(...)' para tablas y gráficos) ...
-                
-                # 3. Construir el PDF
-                doc.build(story)
-
-                # 4. PASO CRUCIAL: Mover el puntero al inicio del buffer
-                buf.seek(0)
-                
-                # 5. Descarga
-                st.success("✅ PDF generado correctamente.")
-                st.download_button(
-                    label="📥 Descargar Reporte PDF",
-                    data=buf.getvalue(), # Obtener los bytes del buffer
-                    file_name=f"reporte_flota_{mes_pdf}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.error(f"❌ Error crítico generando el PDF: {e}")
+   
