@@ -67,6 +67,7 @@ st.markdown("""
     .desvio-item { padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3d425a; transition: transform 0.2s; }
     .desvio-item:hover { transform: scale(1.02); }
     .desvio-critico { background: #421212 !important; border: 1px solid #FF4B4B !important; }
+    .desvio-advertencia { background: #423b12 !important; border: 1px solid #FFD700 !important; }
     </style>
 """, unsafe_allow_html=True)
 
