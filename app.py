@@ -127,6 +127,26 @@ if not lista_personal and not df_h.empty:
 elif not lista_personal:
     lista_personal = ["NUEVO"]
 
+def crear_backup_local(df):
+    """
+    Guarda una copia de seguridad del DataFrame actual en la carpeta local.
+    """
+    try:
+        if df is None or df.empty:
+            print("No hay datos para respaldar.")
+            return
+        
+        # Crear nombre de archivo con fecha y hora
+        fecha_hoy = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        nombre_archivo = f"backup_flota_{fecha_hoy}.csv"
+        
+        # Guardar
+        df.to_csv(nombre_archivo, index=False, encoding='utf-8-sig')
+        print(f"✅ Backup creado exitosamente: {nombre_archivo}")
+        return nombre_archivo
+    except Exception as e:
+        print(f"❌ Error al crear backup: {e}")
+
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
 tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial", "🤖 IA", "📈 Analítica"])
