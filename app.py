@@ -626,6 +626,7 @@ with TAB_PDF:
                     story.append(Spacer(1, 0.5*cm))
 
                     # ── Tabla de datos ──
+# ── Tabla de datos ──
                     story.append(Paragraph("📋 Detalle de Registros del Mes", h2_style))
                     cols_tabla = ['Fecha', 'Chofer', 'Movil', 'Marca', 'Ruta',
                                   'KM_Recorr', 'L_Ticket', 'Consumo_L100', 'Costo_Total_ARS', 'Desvio_Neto']
@@ -633,9 +634,9 @@ with TAB_PDF:
                     df_tabla   = df_mes[cols_tabla].copy()
                     df_tabla['Fecha'] = df_tabla['Fecha'].dt.strftime('%d/%m/%Y')
 
-                    headers     = ['Fecha', 'Chofer', 'Móvil', 'Marca', 'Ruta',
-                                   'KM', 'Litros', 'L/100', 'Costo $', 'Desvío'][:len(cols_tabla)]
-                    tabla_data  = [headers]
+                    headers = ['Fecha', 'Chofer', 'Móvil', 'Marca', 'Ruta',
+                               'KM', 'Litros', 'L/100', 'Costo $', 'Desvío'][:len(cols_tabla)]
+                    tabla_data = [headers]
                     for _, row in df_tabla.iterrows():
                         fila = []
                         for c in cols_tabla:
@@ -644,9 +645,15 @@ with TAB_PDF:
                             else: fila.append(str(v))
                         tabla_data.append(fila)
 
-                    col_w  = [2.5*cm, 4*cm, 1.5*cm, 3*cm, 2*cm, 2*cm, 2*cm, 2*cm, 3*cm, 2*cm]
-                    col_w  = col_w[:len(cols_tabla)]
-                    t_data = Table(tabla_data, colWidths=col_w, repeatRows=1)
+                    # --- SOLUCIÓN DINÁMICA DE ANCHO ---
+                    # Ancho total de A4 landscape en puntos (aprox 842) menos márgenes (3cm * 28.35)
+                    ancho_disponible = 842 - (3 * 28.35)
+                    ancho_col = ancho_disponible / len(cols_tabla)
+                    col_w = [ancho_col] * len(cols_tabla)
+                    
+                    # Usamos LongTable para evitar errores de overflow y permitir paginación
+                    from reportlab.platypus import LongTable
+                    t_data = LongTable(tabla_data, colWidths=col_w, repeatRows=1)
 
                     row_styles = [
                         ('BACKGROUND',  (0, 0), (-1, 0),  colors.HexColor('#1e3a5f')),
@@ -657,6 +664,7 @@ with TAB_PDF:
                         ('GRID',        (0, 0), (-1, -1), 0.2, colors.grey),
                         ('ALIGN',       (0, 0), (-1, -1), 'CENTER'),
                     ]
+                    
                     # Resaltar alertas en rojo
                     if 'Consumo_L100' in cols_tabla:
                         ci = cols_tabla.index('Consumo_L100')
@@ -668,8 +676,6 @@ with TAB_PDF:
 
                     t_data.setStyle(TableStyle(row_styles))
                     story.append(t_data)
-
-                    doc.build(story)
 
                     # Limpiar temporales
                     for f in tmpfiles:
