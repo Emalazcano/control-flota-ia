@@ -89,6 +89,17 @@ if "auth" not in st.session_state:
 conn = st.connection("gsheets", type=GSheetsConnection)
 URL = "https://docs.google.com/spreadsheets/d/1PEH7lbtoq_oAHwom0O5YYYskFm6ALJ6LCj1FfQKzpmQ/edit?gid=0#gid=0"
 
+def crear_backup_local(df):
+    try:
+        if df is not None and not df.empty:
+            fecha_hoy = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            nombre_archivo = f"backup_flota_{fecha_hoy}.csv"
+            df.to_csv(nombre_archivo, index=False, encoding='utf-8-sig')
+            return nombre_archivo
+    except:
+        pass
+    return None
+
 if "precio_gasoil" not in st.session_state:
     st.session_state["precio_gasoil"] = 2065.0
 
@@ -120,32 +131,16 @@ def cargar_historial():
         return pd.DataFrame()
 
 df_h = cargar_historial()
+if "backup_realizado" not in st.session_state and not df_h.empty:
+    archivo = crear_backup_local(df_h)
+    if archivo:
+        st.session_state["backup_realizado"] = True
 lista_personal = cargar_lista_choferes()
 
 if not lista_personal and not df_h.empty:
     lista_personal = sorted(df_h["Chofer"].unique().tolist())
 elif not lista_personal:
     lista_personal = ["NUEVO"]
-
-def crear_backup_local(df):
-    """
-    Guarda una copia de seguridad del DataFrame actual en la carpeta local.
-    """
-    try:
-        if df is None or df.empty:
-            print("No hay datos para respaldar.")
-            return
-        
-        # Crear nombre de archivo con fecha y hora
-        fecha_hoy = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        nombre_archivo = f"backup_flota_{fecha_hoy}.csv"
-        
-        # Guardar
-        df.to_csv(nombre_archivo, index=False, encoding='utf-8-sig')
-        print(f"✅ Backup creado exitosamente: {nombre_archivo}")
-        return nombre_archivo
-    except Exception as e:
-        print(f"❌ Error al crear backup: {e}")
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
