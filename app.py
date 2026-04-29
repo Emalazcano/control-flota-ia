@@ -79,25 +79,22 @@ def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
         
-        # 1. Limpieza de columnas numéricas
-        cols_int = ["Movil", "KM_Ini", "KM_Fin", "KM_Recorr", "L_Ralenti", "L_Ticket", "L_Tablero", "L_Cisterna", "L_YPF"]
-        for col in cols_int:
-            if col in df.columns: 
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+        # 1. Aseguramos que los números sean números
+        df['Consumo_L100'] = pd.to_numeric(df['Consumo_L100'], errors='coerce')
         
-        # 2. Conversión de fecha
-        if 'Fecha' in df.columns: 
-            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
-            
-        # 3. CÁLCULO CRÍTICO: Evita el error en "Ojo de Halcón"
         umbral = st.session_state.get("umbral_consumo", 35.0)
-        # Si la columna Consumo_L100 no existe, la creamos (para evitar errores)
-        if 'Consumo_L100' not in df.columns:
-            df['Consumo_L100'] = 0.0
+        
+        # 2. Calculamos usando el nombre de columna EXACTO (sin tilde si así está en tu Excel)
+        # Asegúrate de que el nombre aquí coincida letra por letra con tu Excel
         df['Desvio_Neto'] = (df['Consumo_L100'] - umbral).clip(lower=0)
         
+        # Convertir a datetime para que se pueda ordenar
+        if 'Fecha' in df.columns:
+            df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+            
         return df
-    except: 
+    except Exception as e:
+        st.error(f"Error cargando historial: {e}")
         return pd.DataFrame()
 
 def cargar_lista_choferes():
