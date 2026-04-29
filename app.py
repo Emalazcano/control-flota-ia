@@ -293,29 +293,56 @@ with tabs[1]:
 
         st.divider()
 
-        # --- SECCIÓN 2: CARGAS SOSPECHOSAS (COMPORTAMIENTO) ---
+        # --- SECCIÓN 2: CARGAS SOSPECHOSAS (DISEÑO COMPACTO) ---
         st.subheader("🕵️ Detección de Cargas Sospechosas")
-        st.caption("Viajes donde el consumo excedió más del 15% el promedio habitual del mismo móvil")
+        st.caption("Viajes con consumo >15% del promedio habitual")
 
         sospechosos = df_anomalias[df_anomalias["Exceso_Pct"] > 15].sort_values("Exceso_Pct", ascending=False)
 
         if sospechosos.empty:
-            st.success("✅ No se detectaron anomalías de consumo excesivo.")
+            st.success("✅ No se detectaron anomalías.")
         else:
-            for _, s in sospechosos.iterrows():
-                with st.expander(f"🚩 Unidad {int(s['Movil'])} - {s['Chofer']} (+{s['Exceso_Pct']:.1f}%)"):
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Consumo Viaje", f"{s['Consumo_L100']:.1f}")
-                    c2.metric("Habitual Unidad", f"{s['Promedio_Historico']:.1f}")
-                    c3.metric("Diferencia", f"{s['Consumo_L100'] - s['Promedio_Historico']:.1f} L", delta_color="inverse")
-                    st.info(f"**Detalles:** Fecha {s['Fecha'].strftime('%d/%m/%Y')} en ruta {s['Ruta']}. Posible exceso de carga o ralentí excesivo.")
-
-        st.divider()
-        
-        # --- DESCARGA ---
-        csv = df_filtrado.to_csv(index=False).encode('utf-8')
-        st.download_button(label="📥 Descargar Reporte Completo (CSV)", data=csv, file_name=f'auditoria_{mes_sel}.csv', mime='text/csv', use_container_width=True)
-
+            # Usamos columnas para crear una grilla compacta (2 tarjetas por fila)
+            # En móvil Streamlit las apilará automáticamente
+            cols_sos = st.columns(2)
+            
+            for i, (_, s) in enumerate(sospechosos.iterrows()):
+                # Alternamos entre columna 1 y 2
+                with cols_sos[i % 2]:
+                    # Definimos el color según la gravedad
+                    color_alerta = "#FF4B4B" if s['Exceso_Pct'] > 30 else "#FFD700"
+                    
+                    st.markdown(f"""
+                        <div style="
+                            background-color: #1e2130;
+                            border-radius: 8px;
+                            padding: 12px;
+                            margin-bottom: 10px;
+                            border-left: 5px solid {color_alerta};
+                            border-right: 1px solid #3d425a;
+                            border-top: 1px solid #3d425a;
+                            border-bottom: 1px solid #3d425a;
+                        ">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <span style="font-weight: bold; color: white; font-size: 0.9em;">U. {int(s['Movil'])} - {s['Chofer']}</span>
+                                <span style="color: {color_alerta}; font-weight: bold;">+{s['Exceso_Pct']:.1f}%</span>
+                            </div>
+                            <div style="margin-top: 8px; display: flex; justify-content: space-between;">
+                                <div>
+                                    <small style="color: #aab;">Actual</small><br>
+                                    <b style="font-size: 1.1em;">{s['Consumo_L100']:.1f}</b>
+                                </div>
+                                <div style="text-align: center;">
+                                    <small style="color: #aab;">Habitual</small><br>
+                                    <b style="color: #4CAF50;">{s['Promedio_Historico']:.1f}</b>
+                                </div>
+                                <div style="text-align: right;">
+                                    <small style="color: #aab;">Ruta</small><br>
+                                    <span style="font-size: 0.8em; font-weight: bold;">{s['Ruta'][:5]}...</span>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
 # --- TAB 2: HISTORIAL ---
 with tabs[2]:
     if not df_h.empty:
