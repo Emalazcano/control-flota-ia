@@ -678,7 +678,6 @@ with TAB_PDF:
                     story.append(t_data)
 
 # 1. Aseguramos el filtrado antes de generar
-if st.button("🖨️ Generar PDF", key="btn_generar_pdf_unico", use_container_width=True):
     df_mes = df_pdf_base[df_pdf_base['Mes'] == mes_pdf].copy()
 
     # VERIFICACIÓN: ¿Hay datos reales?
