@@ -677,43 +677,40 @@ with TAB_PDF:
                     t_data.setStyle(TableStyle(row_styles))
                     story.append(t_data)
 
-# 1. Aseguramos el filtrado antes de generar
+    # 1. Aseguramos el filtrado antes de generar
+if st.button("🖨️ Generar PDF", key="btn_generar_pdf_final", use_container_width=True):
     df_mes = df_pdf_base[df_pdf_base['Mes'] == mes_pdf].copy()
 
-    # VERIFICACIÓN: ¿Hay datos reales?
     if df_mes.empty:
-        st.error(f"❌ No hay datos registrados para el mes {mes_pdf}. Verifica el historial.")
+        st.error(f"❌ No hay datos registrados para el mes {mes_pdf}.")
     else:
-        with st.spinner("Generando reporte PDF..."):
+        with st.spinner("Generando reporte..."):
             try:
+                # 1. Crear el buffer en memoria
                 buf = io.BytesIO()
+                
+                # 2. Configurar el documento
                 doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                                         rightMargin=1.5*cm, leftMargin=1.5*cm,
                                         topMargin=1.5*cm, bottomMargin=1.5*cm)
                 story = []
-                # ... (todo tu código de construcción de 'story' aquí) ...
                 
+                # ... (Aquí va toda tu lógica de 'story.append(...)' para tablas y gráficos) ...
+                
+                # 3. Construir el PDF
                 doc.build(story)
 
-                # 2. OBTENCIÓN DE BYTES ROBUSTA
-                pdf_bytes = buf.getvalue()
+                # 4. PASO CRUCIAL: Mover el puntero al inicio del buffer
+                buf.seek(0)
                 
-                if len(pdf_bytes) > 0:
-                    st.success("✅ PDF generado correctamente.")
-                    st.download_button(
-                        label="📥 Descargar Reporte PDF",
-                        data=pdf_bytes,  # Pasamos los bytes directamente
-                        file_name=f"reporte_flota_{mes_pdf}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                else:
-                    st.error("❌ El archivo generado está vacío. Revisa la lógica de construcción del PDF.")
-                
-                # Limpiar temporales
-                for f in tmpfiles:
-                    try: os.unlink(f)
-                    except: pass
-                
+                # 5. Descarga
+                st.success("✅ PDF generado correctamente.")
+                st.download_button(
+                    label="📥 Descargar Reporte PDF",
+                    data=buf.getvalue(), # Obtener los bytes del buffer
+                    file_name=f"reporte_flota_{mes_pdf}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
             except Exception as e:
                 st.error(f"❌ Error crítico generando el PDF: {e}")
