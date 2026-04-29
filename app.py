@@ -37,6 +37,11 @@ st.markdown("""
     .metric-card { background-color: #1e2130; padding: 15px; border-radius: 12px; border: 1px solid #3d425a; text-align: center; }
     .desvio-item { padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #3d425a; }
     .desvio-critico { background: #421212 !important; border: 1px solid #FF4B4B !important; }
+    /* --- COPIA Y PEGA SOLO ESTO AL FINAL --- */
+    .stTextInput, .stNumberInput, .stSelectbox, .stDateInput, .stTextArea {
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
 </style>
 """, unsafe_allow_html=True)
 
