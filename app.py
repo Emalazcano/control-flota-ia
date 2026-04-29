@@ -683,11 +683,16 @@ with TAB_PDF:
                         except: pass
 
                     buf.seek(0)
-                    st.success("✅ PDF generado correctamente.")
-                    st.download_button(
-                        label     = "📥 Descargar Reporte PDF",
-                        data      = buf,
-                        file_name = f"reporte_flota_{mes_pdf}.pdf",
-                        mime      = "application/pdf",
-                        use_container_width=True
-                    )
+                    pdf_bytes = buf.getvalue()
+
+                    if len(pdf_bytes) > 0:
+                        st.success("✅ PDF generado correctamente.")
+                        st.download_button(
+                            label     = "📥 Descargar Reporte PDF",
+                            data      = pdf_bytes,
+                            file_name = f"reporte_flota_{mes_pdf}.pdf",
+                            mime      = "application/pdf",
+                            use_container_width=True
+                        )
+                    else:
+                        st.error("❌ El PDF generado está vacío. Revisa los datos.")
