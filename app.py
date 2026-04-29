@@ -584,7 +584,7 @@ with TAB_PDF:
                     story.append(Paragraph("📈 Consumo Promedio por Chofer (L/100km)", h2_style))
                     df_g1 = df_mes.groupby('Chofer')['Consumo_L100'].mean().sort_values(ascending=True)
                     fig1, ax1 = plt.subplots(figsize=(10, max(3, len(df_g1) * 0.4)))
-                    bar_colors = ['#FF4B4B' if v > UMBRAL else '#4CAF50' for v in df_g1.values]
+                    bar_colors = ['#FF4B4B' if v > umbral_val else '#4CAF50' for v in df_g1.values]
                     ax1.barh(df_g1.index, df_g1.values, color=bar_colors)
                     ax1.axvline(UMBRAL, color='orange', linestyle='--', label=f'Umbral {UMBRAL:.0f}')
                     ax1.set_xlabel('L/100km')
