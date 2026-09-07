@@ -190,7 +190,7 @@ with tabs[0]:
         with v1: st.metric("📏 KM", f"{dist_v:,}")
         with v2: st.metric("🔢 Cons", f"{(lt/dist_v*100 if dist_v>0 else 0):.1f} L/100")
         with v3: st.metric("💰 Costo", f"${(lt*precio_comb):,.0f}")
-        with v4: st.metric("🚨 Desvío", f"{(lt-(ltab+lral)):.1f}")
+        with v4: st.metric("🚨 Desvío", f"{(lt - ltab):.1f}")
         
         submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
@@ -205,7 +205,7 @@ with tabs[0]:
             "Fecha": fecha_input.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
             "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist_final,
             "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round((lt/dist_final*100 if dist_final > 0 else 0), 2),
-            "Costo_Total_ARS": round(lt * precio_comb, 2), "Desvio_Neto": round(lt - (ltab + lral), 2)
+            "Costo_Total_ARS": round(lt * precio_comb, 2), "Desvio_Neto": round(lt - ltab, 2)
         }
         
         df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
