@@ -4,8 +4,6 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import time
-import os
-from google import genai
 
 # Debe ejecutarse antes de cualquier otro comando de Streamlit.
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
@@ -48,15 +46,6 @@ st.markdown("""
     .driver-score { font-size: 20px; color: #4a90e2; }
     </style>
 """, unsafe_allow_html=True)
-
-# --- CONFIGURACIÓN DE IA GEMINI ---
-if "GOOGLE_API_KEY" in st.secrets:
-    api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
-    gemini_client = genai.Client(api_key=api_key_final)
-    GEMINI_MODEL = "gemini-3.8-flash"
-else:
-    st.warning("⚠️ Clave API no detectada en Secrets.")
-    gemini_client = None
 
 st.markdown("""
     <style>
@@ -155,7 +144,7 @@ elif not lista_personal:
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
-tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial", "🤖 IA", "📈 Analítica"])
+tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial", "📈 Analítica"])
 
 # --- TAB 0: REGISTRO ---
 with tabs[0]:
@@ -263,7 +252,6 @@ with tabs[0]:
         df_final['Fecha'] = df_final['Fecha'].dt.strftime('%d/%m/%Y')
         try:
             conn.update(spreadsheet=URL, data=df_final)
-            st.session_state.ai_cache = {}
             st.success("✅ Guardado."); time.sleep(1); st.rerun()
         except Exception as e:
             st.error(f"No se pudo guardar el registro en Google Sheets: {e}")
@@ -450,88 +438,8 @@ with tabs[2]:
     else:
         st.info("Todavía no hay registros en el historial.")
 
-# --- TAB 3: ASISTENTE IA ---
+# --- TAB 3: ANALÍTICA AVANZADA ---
 with tabs[3]:
-    st.subheader("🤖 Asistente Inteligente")
-
-    if df_h.empty:
-        st.info("Carga registros de combustible para consultar análisis basados en datos.")
-
-    # Inicializar caché en session_state para evitar llamadas repetidas
-    if "ai_cache" not in st.session_state:
-        st.session_state.ai_cache = {}
-
-    # Botones de acción
-    c1, c2, c3, c4 = st.columns(4)
-    pregunta_rapida = None
-    
-    if c1.button("🥇 ¿Mejor Chofer?"):
-        pregunta_rapida = "¿Quién ha sido el chofer más eficiente este mes según los datos?"
-    if c2.button("📊 ¿Móvil más gastador?"):
-        pregunta_rapida = "¿Qué unidad (móvil) ha tenido el consumo de combustible más alto?"
-    if c3.button("⚖️ ¿Comparar Rutas?"):
-        pregunta_rapida = "Compara el consumo promedio entre 'Llano' y 'Alta Montaña'."
-    if c4.button("🔍 Diagnóstico Mensual") and not df_h.empty:
-        resumen = df_h.groupby('Movil')['Consumo_L100'].mean().to_string()
-        pregunta_rapida = f"Analiza estos consumos: {resumen}. ¿Hay anomalías o mantenimiento urgente?"
-
-    # Mostrar historial
-    if "messages" not in st.session_state: st.session_state.messages = []
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]): st.markdown(message["content"])
-
-    # Formulario
-    with st.form("ai_form", clear_on_submit=True):
-        pregunta_input = st.text_input("¿Qué quieres saber?", key="input_ia")
-        btn_enviar = st.form_submit_button("Consultar IA")
-
-    pregunta = pregunta_rapida if pregunta_rapida else pregunta_input
-    
-    if (btn_enviar or pregunta_rapida) and pregunta and gemini_client:
-        # Lógica de CACHÉ: Si ya preguntaste esto, no gastamos cuota
-        if pregunta in st.session_state.ai_cache:
-            respuesta_final = st.session_state.ai_cache[pregunta]
-            st.info("💡 (Respuesta recuperada del historial reciente para ahorrar cuota)")
-        else:
-            # Solo llamamos a la API si no tenemos la respuesta guardada
-            st.session_state.messages.append({"role": "user", "content": pregunta})
-            with st.chat_message("user"): st.markdown(pregunta)
-            
-            with st.chat_message("assistant"):
-                with st.spinner("Analizando..."):
-                    # Enviar un resumen acotado de los registros para fundamentar la respuesta.
-                    if not df_h.empty:
-                        contexto_datos = df_h.groupby(["Movil", "Marca", "Ruta"], dropna=False).agg(
-                            viajes=("Consumo_L100", "count"),
-                            consumo_promedio=("Consumo_L100", "mean"),
-                            desvio_total=("Desvio_Neto", "sum"),
-                        ).round(2).reset_index().to_string(index=False)
-                    else:
-                        contexto_datos = "No hay registros disponibles."
-                    ctx = (
-                        "Eres un asistente de análisis de flota. Basa las conclusiones solo en los datos adjuntos; "
-                        "si no alcanzan para responder, dilo claramente. No diagnostiques fallas mecánicas como certezas. "
-                        "Sugiere inspección cuando los datos indiquen un consumo inusual.\n"
-                        f"Resumen de registros:\n{contexto_datos}"
-                    )
-                    try:
-                        response = gemini_client.interactions.create(
-                            model=GEMINI_MODEL,
-                            input=f"{ctx}\nPregunta: {pregunta}",
-                        )
-                        respuesta_final = response.output_text or "Gemini no devolvió una respuesta de texto."
-                        st.session_state.ai_cache[pregunta] = respuesta_final # Guardamos en caché
-                    except Exception as e:
-                        st.error(f"No se pudo consultar Gemini: {e}")
-                        st.stop()
-        
-        # Mostrar respuesta
-        if 'respuesta_final' in locals():
-            st.markdown(respuesta_final)
-            st.session_state.messages.append({"role": "assistant", "content": respuesta_final})
-
-# --- TAB 4: ANALÍTICA AVANZADA ---
-with tabs[4]:
     st.subheader("📈 Analítica y Diagnóstico")
     if df_h.empty:
         st.info("Todavía no hay registros para mostrar. Agrega un registro en la pestaña Registro.")
