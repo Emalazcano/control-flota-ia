@@ -729,3 +729,4 @@ with tabs[4]:
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
 
 
+
