@@ -386,6 +386,32 @@ with tabs[1]:
         )
 
         st.divider()
+        st.subheader("🗺️ Recorridos y promedio por marca")
+        st.caption("Cada fila agrupa los viajes cargados por recorrido, tipo de ruta y marca. El promedio está ponderado por los kilómetros recorridos y usa los litros cargados en taller más los cargados en ruta.")
+        if "Traza" not in df_filtrado.columns:
+            df_filtrado["Traza"] = "Sin recorrido"
+        df_recorridos = df_filtrado.groupby(["Traza", "Ruta", "Marca"], dropna=False).agg(
+            Viajes=("KM_Recorr", "size"),
+            Kilometros=("KM_Recorr", "sum"),
+            Litros_Cargados=("Litros_Cargados_Total", "sum"),
+        ).reset_index()
+        df_recorridos = df_recorridos[df_recorridos["Kilometros"] > 0].copy()
+        df_recorridos["Promedio_L_100km"] = df_recorridos["Litros_Cargados"] / df_recorridos["Kilometros"] * 100
+        df_recorridos = df_recorridos.sort_values(["Traza", "Marca", "Ruta"])
+        if df_recorridos.empty:
+            st.info("No hay recorridos con kilómetros válidos para mostrar.")
+        else:
+            st.dataframe(
+                df_recorridos.rename(columns={
+                    "Traza": "Recorrido", "Ruta": "Tipo de ruta", "Marca": "Marca",
+                    "Viajes": "Viajes cargados", "Kilometros": "Kilómetros",
+                    "Litros_Cargados": "Litros cargados", "Promedio_L_100km": "Promedio (L/100 km)",
+                })[["Recorrido", "Tipo de ruta", "Marca", "Viajes cargados", "Kilómetros", "Litros cargados", "Promedio (L/100 km)"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.divider()
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
         df_comp = df_filtrado.groupby(["Ruta", "Marca"]).agg(
             Litros=("Litros_Cargados_Total", "sum"),
