@@ -212,9 +212,8 @@ def guardar_nuevo_registro(registro):
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # 1. Selector de móvil fuera del formulario para que detecte el cambio al instante
-    col_m1, col_m2, _ = st.columns([1, 1, 1])
-    movil_sel = col_m1.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
+    # Mantener el orden habitual de carga: móvil, chofer, fecha y luego tramo.
+    movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
     
     # 2. Lógica de recuperación de datos (fuera del formulario para que calcule al cambiar el móvil)
     km_sugerido = 0.0
@@ -235,13 +234,17 @@ with tabs[0]:
             if ult_r["Chofer"] in lista_personal:
                 idx_chofer = lista_personal.index(ult_r["Chofer"])
 
-    # Fuera del formulario para que los campos de tablero cambien al seleccionar la marca.
-    marca = col_m2.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
+    c_chofer, c_fecha = st.columns(2)
+    chofer = c_chofer.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
+    fecha_input = c_fecha.date_input("📅 Fecha de Carga", datetime.now(), key="fecha_registro")
 
     traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
     traza_sel = st.selectbox("🗺️ Tramo / recorrido", traza_ex, key="registro_tramo")
     nt = st.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper() if traza_sel == "➕ NUEVA" else ""
     t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
+
+    # Fuera del formulario para que los campos específicos del tablero cambien al seleccionar la marca.
+    marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
 
     # Infere el tipo de ruta por mayoría de registros previos del mismo tramo.
     ruta_tipo = None
@@ -267,9 +270,7 @@ with tabs[0]:
     with st.form("registro_form_v2", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
             precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
-            fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
         
         with c2:
             st.markdown(f"**Tipo de ruta aplicado:** {ruta_tipo}")
@@ -724,5 +725,6 @@ with tabs[4]:
             st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
 
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
+
 
 
