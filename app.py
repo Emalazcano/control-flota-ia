@@ -1,4 +1,3 @@
- 
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
@@ -7,6 +6,9 @@ from datetime import datetime
 import time
 import os
 import google.generativeai as genai
+
+# Debe ejecutarse antes de cualquier otro comando de Streamlit.
+st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # --- CSS PARA OPTIMIZACIÓN MÓVIL ---
 st.markdown("""
@@ -46,9 +48,6 @@ st.markdown("""
     .driver-score { font-size: 20px; color: #4a90e2; }
     </style>
 """, unsafe_allow_html=True)
-
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
 
 # --- CONFIGURACIÓN DE IA GEMINI ---
 if "GOOGLE_API_KEY" in st.secrets:
@@ -104,7 +103,22 @@ def cargar_lista_choferes():
 def cargar_historial():
     try:
         df = conn.read(spreadsheet=URL, ttl=0)
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Ticket", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        # Compatibilidad con registros anteriores: L_Ticket pasa a llamarse L_Taller.
+        if "L_Taller" not in df.columns and "L_Ticket" in df.columns:
+            df = df.rename(columns={"L_Ticket": "L_Taller"})
+        elif "L_Taller" in df.columns and "L_Ticket" in df.columns:
+            df["L_Taller"] = pd.to_numeric(df["L_Taller"], errors="coerce").fillna(
+                pd.to_numeric(df["L_Ticket"], errors="coerce")
+            )
+            df = df.drop(columns=["L_Ticket"])
+
+        # Los viajes anteriores no tenían una carga en ruta registrada.
+        if "L_Taller" not in df.columns:
+            df["L_Taller"] = 0
+        if "L_Ruta" not in df.columns:
+            df["L_Ruta"] = 0
+
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -179,40 +193,53 @@ with tabs[0]:
         with c3:
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
             kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
-            lt = st.number_input("⛽ Litros Ticket", value=0.0)
+            l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, help="Combustible cargado en la cisterna de la empresa.")
+            l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, help="Combustible cargado fuera de la empresa durante el viaje.")
             ltab = st.number_input("📟 Litros Tablero", value=0.0)
             lral = st.number_input("⏳ Litros Ralentí", value=0.0)
 
         # Métricas visuales
         dist_v = int(kmf - kmi) if kmf > kmi else 0
+        litros_cargados_total = l_taller + l_ruta
+        desvio_v = litros_cargados_total - ltab
         st.markdown("---")
         v1, v2, v3, v4 = st.columns(4)
         with v1: st.metric("📏 KM", f"{dist_v:,}")
-        with v2: st.metric("🔢 Cons", f"{(lt/dist_v*100 if dist_v>0 else 0):.1f} L/100")
-        with v3: st.metric("💰 Costo", f"${(lt*precio_comb):,.0f}")
-        with v4: st.metric("🚨 Desvío", f"{(lt - ltab):.1f}")
+        with v2: st.metric("🔢 Consumo", f"{(litros_cargados_total/dist_v*100 if dist_v>0 else 0):.1f} L/100")
+        with v3: st.metric("💰 Costo", f"${(litros_cargados_total*precio_comb):,.0f}")
+        with v4: st.metric("🚨 Desvío vs tablero", f"{desvio_v:.1f} L")
         
         submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
     # Lógica de guardado
     if submit_button:
-        # Validación mínima
+        # Validar datos antes de escribir en la hoja.
         if kmf <= kmi:
             st.error("⚠️ El KM Final debe ser mayor al Inicial."); st.stop()
+        if precio_comb <= 0 or litros_cargados_total <= 0 or ltab < 0 or lral < 0:
+            st.error("⚠️ El precio debe ser positivo, registra litros cargados en taller o en ruta y no ingreses litros negativos."); st.stop()
+        if traza_sel == "➕ NUEVA" and not nt.strip():
+            st.error("⚠️ Escribe el nombre de la nueva traza."); st.stop()
         
         dist_final = int(kmf - kmi)
         nuevo_reg = {
             "Fecha": fecha_input.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
             "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist_final,
-            "L_Ticket": lt, "L_Tablero": ltab, "L_Ralenti": lral, "Consumo_L100": round((lt/dist_final*100 if dist_final > 0 else 0), 2),
-            "Costo_Total_ARS": round(lt * precio_comb, 2), "Desvio_Neto": round(lt - ltab, 2)
+            "L_Taller": l_taller, "L_Ruta": l_ruta, "L_Tablero": ltab, "L_Ralenti": lral,
+            "Consumo_L100": round((litros_cargados_total/dist_final*100 if dist_final > 0 else 0), 2),
+            "Costo_Total_ARS": round(litros_cargados_total * precio_comb, 2),
+            "Desvio_Neto": round(litros_cargados_total - ltab, 2)
         }
         
         df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
         df_final['Fecha'] = pd.to_datetime(df_final['Fecha'], dayfirst=True, errors='coerce')
         df_final['Fecha'] = df_final['Fecha'].dt.strftime('%d/%m/%Y')
-        conn.update(spreadsheet=URL, data=df_final)
-        st.success("✅ Guardado."); time.sleep(1); st.rerun()
+        try:
+            conn.update(spreadsheet=URL, data=df_final)
+            st.session_state.ai_cache = {}
+            st.success("✅ Guardado."); time.sleep(1); st.rerun()
+        except Exception as e:
+            st.error(f"No se pudo guardar el registro en Google Sheets: {e}")
 
 # --- TAB 1: OJO DE HALCÓN ---
 with tabs[1]:
@@ -220,12 +247,48 @@ with tabs[1]:
         df_ana = df_h.copy()
         df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'])
         df_ana['Mes_Año'] = df_ana['Fecha'].dt.to_period('M').astype(str)
+        for col in ["L_Taller", "L_Ruta", "L_Tablero"]:
+            if col not in df_ana.columns:
+                df_ana[col] = 0
+            df_ana[col] = pd.to_numeric(df_ana[col], errors="coerce").fillna(0)
+        if "KM_Recorr" not in df_ana.columns:
+            df_ana["KM_Recorr"] = pd.to_numeric(df_ana["KM_Fin"], errors="coerce").fillna(0) - pd.to_numeric(df_ana["KM_Ini"], errors="coerce").fillna(0)
+        df_ana["KM_Recorr"] = pd.to_numeric(df_ana["KM_Recorr"], errors="coerce").fillna(0).clip(lower=0)
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
         mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
+        df_filtrado = df_filtrado.copy()
+        df_filtrado["Litros_Cargados_Total"] = df_filtrado["L_Taller"] + df_filtrado["L_Ruta"]
+        df_filtrado["Desvio_Bruto"] = df_filtrado["Litros_Cargados_Total"] - df_filtrado["L_Tablero"]
+
+        # Detectar diferencias repetidas por móvil y mes, usando todos los tipos de ruta.
+        # Así el patrón del tablero se separa del desvío atribuible a un chofer.
+        df_base_unidad = df_ana if mes_sel == "Todos" else df_ana[df_ana["Mes_Año"] == mes_sel]
+        df_base_unidad = df_base_unidad.copy()
+        df_base_unidad["Desvio_Bruto"] = df_base_unidad["L_Taller"] + df_base_unidad["L_Ruta"] - df_base_unidad["L_Tablero"]
+        desvio_unidad = df_base_unidad.groupby(["Mes_Año", "Movil"], dropna=False).agg(
+            Viajes=("Desvio_Bruto", "count"),
+            Promedio_Bruto=("Desvio_Bruto", "mean"),
+            Variacion=("Desvio_Bruto", "std"),
+        ).reset_index()
+        desvio_unidad["Variacion"] = desvio_unidad["Variacion"].fillna(0)
+        patron_sostenido = (desvio_unidad["Viajes"] >= 2) & (desvio_unidad["Promedio_Bruto"].abs() > 50) & (desvio_unidad["Variacion"] <= 50)
+        desvio_unidad["Evaluación"] = "Sin patrón sostenido detectado"
+        desvio_unidad.loc[patron_sostenido, "Evaluación"] = "Diferencia repetida: revisar tablero"
+        desvio_unidad["Sesgo_Tablero"] = desvio_unidad["Promedio_Bruto"].where(patron_sostenido, 0)
+        df_filtrado = df_filtrado.merge(desvio_unidad[["Mes_Año", "Movil", "Sesgo_Tablero"]], on=["Mes_Año", "Movil"], how="left")
+        df_filtrado["Sesgo_Tablero"] = df_filtrado["Sesgo_Tablero"].fillna(0)
+        df_filtrado["Desvio_Tras_Sesgo"] = df_filtrado["Desvio_Bruto"] - df_filtrado["Sesgo_Tablero"]
+
+        # El margen de la cisterna solo aplica cuando hubo una carga en el taller.
+        df_filtrado["Margen_Cisterna"] = 50 * df_filtrado["L_Taller"].gt(0).astype(int)
+        fuera_margen = df_filtrado["Desvio_Tras_Sesgo"].abs() > df_filtrado["Margen_Cisterna"]
+        df_filtrado["Desvio_Ajustado"] = df_filtrado["Desvio_Tras_Sesgo"] - df_filtrado["Margen_Cisterna"] * df_filtrado["Desvio_Tras_Sesgo"].gt(df_filtrado["Margen_Cisterna"]).astype(int) + df_filtrado["Margen_Cisterna"] * df_filtrado["Desvio_Tras_Sesgo"].lt(-df_filtrado["Margen_Cisterna"]).astype(int)
+        df_filtrado.loc[~fuera_margen, "Desvio_Ajustado"] = 0
+        df_filtrado["Desvio_Ajustado_Abs"] = df_filtrado["Desvio_Ajustado"].abs()
         csv = df_filtrado.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Descargar reporte filtrado (CSV)",
@@ -234,41 +297,93 @@ with tabs[1]:
             mime='text/csv',    
         )
         st.divider()
-        st.subheader("🏆 Ranking de Eficiencia (Top 5)")
-        top_5 = df_filtrado.groupby("Chofer")["Consumo_L100"].mean().sort_values().head(5).reset_index()
-        cols = st.columns(5)
-        medallas = ["🥇", "🥈", "🥉", "👤", "👤"]
-        for i, row in top_5.iterrows():
-            with cols[i]:
-                st.markdown(f'<div class="metric-card"><div class="medal-icon">{medallas[i]}</div><div class="driver-name">{row["Chofer"]}</div><div class="driver-score">{row["Consumo_L100"]:.1f}</div><div style="color:#aab;font-size:12px;">L/100</div></div>', unsafe_allow_html=True)
+        st.subheader("🏆 Ranking mensual de eficiencia (Top 5 por mes)")
+        st.caption("Consumo ponderado = litros cargados en taller y en ruta ÷ kilómetros recorridos × 100. Cada mes se calcula por separado. El promedio usa los litros registrados, por lo que el posible error de la cisterna también puede influir en este ranking.")
+        ranking_mensual = df_filtrado.groupby(["Mes_Año", "Chofer"], dropna=False).agg(
+            Litros_Cargados=("Litros_Cargados_Total", "sum"),
+            KM_Recorridos=("KM_Recorr", "sum"),
+            Viajes=("KM_Recorr", "size"),
+        ).reset_index()
+        ranking_mensual = ranking_mensual[ranking_mensual["KM_Recorridos"] > 0].copy()
+        ranking_mensual["Promedio_L_100km"] = ranking_mensual["Litros_Cargados"] / ranking_mensual["KM_Recorridos"] * 100
+        ranking_mensual["Puesto"] = ranking_mensual.groupby("Mes_Año")["Promedio_L_100km"].rank(method="first").astype(int)
+        ranking_mensual = ranking_mensual[ranking_mensual["Puesto"] <= 5].sort_values(["Mes_Año", "Puesto"], ascending=[False, True])
+        if ranking_mensual.empty:
+            st.info("No hay kilómetros válidos para calcular el ranking.")
+        else:
+            st.dataframe(
+                ranking_mensual.rename(columns={
+                    "Mes_Año": "Mes", "Puesto": "Puesto", "Chofer": "Chofer",
+                    "Promedio_L_100km": "Promedio (L/100 km)", "Viajes": "Viajes",
+                    "KM_Recorridos": "Kilómetros", "Litros_Cargados": "Litros cargados",
+                })[["Mes", "Puesto", "Chofer", "Promedio (L/100 km)", "Viajes", "Kilómetros", "Litros cargados"]],
+                use_container_width=True,
+                hide_index=True,
+            )
 
         st.divider()
-        st.subheader("⚠️ Ranking de Desvíos de Combustible")
-        df_desv = df_filtrado.groupby("Chofer")["Desvio_Neto"].sum().reset_index()
-        df_desv = df_desv[df_desv['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
-
-        if df_desv.empty:
-            st.info("✅ No hay desvíos críticos.")
+        st.subheader("⚠️ Desvíos por chofer y mes")
+        st.caption("El desvío por chofer se calcula viaje a viaje: primero descuenta un patrón repetido del tablero del móvil, si se detecta; después aplica hasta ±50 L por viaje cuando hubo carga en el taller. Las cargas solo en ruta no reciben ese margen. Se conservan los desvíos brutos para comparar.")
+        resumen_desvios = df_filtrado.groupby(["Mes_Año", "Chofer"], dropna=False).agg(
+            Viajes=("Desvio_Bruto", "size"),
+            Viajes_Dentro_Margen=("Desvio_Ajustado", lambda s: int((s == 0).sum())),
+            Desvio_Bruto_Neto=("Desvio_Bruto", "sum"),
+            Desvio_Ajustado_Neto=("Desvio_Ajustado", "sum"),
+            Desvio_Ajustado_Absoluto=("Desvio_Ajustado_Abs", "sum"),
+        ).reset_index().sort_values(["Mes_Año", "Desvio_Ajustado_Absoluto"], ascending=[False, False])
+        if resumen_desvios.empty:
+            st.info("No hay viajes para calcular desvíos.")
         else:
-            for _, row in df_desv.iterrows():
-                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>{row["Chofer"]}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+            st.dataframe(
+                resumen_desvios.rename(columns={
+                    "Mes_Año": "Mes", "Viajes_Dentro_Margen": "Viajes dentro del margen tras ajuste de unidad",
+                    "Desvio_Bruto_Neto": "Desvío bruto neto (L)",
+                    "Desvio_Ajustado_Neto": "Desvío fuera del margen (neto, L)",
+                    "Desvio_Ajustado_Absoluto": "Desvíos fuera del margen (total, L)",
+                }),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        with st.expander("Ver desvío viaje por viaje"):
+            detalle_desvios = df_filtrado[["Fecha", "Mes_Año", "Movil", "Chofer", "L_Taller", "L_Ruta", "L_Tablero", "Desvio_Bruto", "Sesgo_Tablero", "Desvio_Tras_Sesgo", "Margen_Cisterna", "Desvio_Ajustado"]].sort_values("Desvio_Ajustado", key=lambda s: s.abs(), ascending=False)
+            st.dataframe(
+                detalle_desvios.rename(columns={
+                    "Fecha": "Fecha", "Mes_Año": "Mes", "Movil": "Móvil", "Chofer": "Chofer",
+                    "L_Taller": "Litros taller", "L_Ruta": "Litros ruta", "L_Tablero": "Litros tablero",
+                    "Desvio_Bruto": "Desvío bruto (L)", "Sesgo_Tablero": "Patrón promedio del móvil (L)",
+                    "Desvio_Tras_Sesgo": "Desvío tras patrón de unidad (L)",
+                    "Margen_Cisterna": "Margen cisterna aplicado (L)",
+                    "Desvio_Ajustado": "Desvío neto fuera de ±50 L (L)",
+                }),
+                use_container_width=True,
+                hide_index=True,
+            )
 
         st.divider()
-        st.subheader("📊 Reporte de Desvíos por Unidad (Móvil)")
-        df_movil = df_filtrado.groupby("Movil")["Desvio_Neto"].sum().reset_index()
-        df_movil = df_movil[df_movil['Desvio_Neto'] > 50].sort_values("Desvio_Neto", ascending=False)
-        
-        if df_movil.empty:
-            st.info("✅ No hay desvíos críticos.")
-        else:
-            for _, row in df_movil.iterrows():
-                st.markdown(f'<div class="desvio-item desvio-critico"><div><b>Unidad Nº {int(row["Movil"])}</b><br><small>🚨 Crítico (>50L)</small></div><b>{row["Desvio_Neto"]:.1f} L</b></div>', unsafe_allow_html=True)
+        st.subheader("🚌 Diferencia repetida por unidad")
+        st.caption("Es una señal para revisar el tablero, no una conclusión definitiva: marca diferencias promedio mayores a 50 L repetidas en al menos dos viajes, con una variación entre viajes de hasta 50 L.")
+        st.dataframe(
+            desvio_unidad.rename(columns={
+                "Mes_Año": "Mes", "Movil": "Móvil", "Promedio_Bruto": "Diferencia promedio vs tablero (L)",
+                "Variacion": "Variación entre viajes (L)",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
 
         st.divider()
         st.subheader("📊 Comparativa: Scania vs Mercedes por Ruta")
-        df_comp = df_filtrado.groupby(["Ruta", "Marca"])["Consumo_L100"].mean().reset_index()
+        df_comp = df_filtrado.groupby(["Ruta", "Marca"]).agg(
+            Litros=("Litros_Cargados_Total", "sum"),
+            Kilometros=("KM_Recorr", "sum"),
+        ).reset_index()
+        df_comp = df_comp[df_comp["Kilometros"] > 0].copy()
+        df_comp["Consumo_L100"] = df_comp["Litros"] / df_comp["Kilometros"] * 100
         fig_comp = px.bar(df_comp, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", text_auto='.1f', template="plotly_dark")
         st.plotly_chart(fig_comp, use_container_width=True)
+    else:
+        st.info("Todavía no hay registros para analizar.")
 
 # --- TAB 2: HISTORIAL ---
 with tabs[2]:
@@ -277,10 +392,15 @@ with tabs[2]:
         # Aquí formateamos la fecha a DD/MM/YYYY para que no se vea la hora
         df_v['Fecha'] = df_v['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(df_v, use_container_width=True)
+    else:
+        st.info("Todavía no hay registros en el historial.")
 
 # --- TAB 3: ASISTENTE IA ---
 with tabs[3]:
     st.subheader("🤖 Asistente Inteligente")
+
+    if df_h.empty:
+        st.info("Carga registros de combustible para consultar análisis basados en datos.")
 
     # Inicializar caché en session_state para evitar llamadas repetidas
     if "ai_cache" not in st.session_state:
@@ -296,7 +416,7 @@ with tabs[3]:
         pregunta_rapida = "¿Qué unidad (móvil) ha tenido el consumo de combustible más alto?"
     if c3.button("⚖️ ¿Comparar Rutas?"):
         pregunta_rapida = "Compara el consumo promedio entre 'Llano' y 'Alta Montaña'."
-    if c4.button("🔍 Diagnóstico Mensual"):
+    if c4.button("🔍 Diagnóstico Mensual") and not df_h.empty:
         resumen = df_h.groupby('Movil')['Consumo_L100'].mean().to_string()
         pregunta_rapida = f"Analiza estos consumos: {resumen}. ¿Hay anomalías o mantenimiento urgente?"
 
@@ -324,13 +444,27 @@ with tabs[3]:
             
             with st.chat_message("assistant"):
                 with st.spinner("Analizando..."):
-                    ctx = "Eres jefe de flota. Sé crítico. Si hay consumos altos, recomienda mantenimiento."
+                    # Enviar un resumen acotado de los registros para fundamentar la respuesta.
+                    if not df_h.empty:
+                        contexto_datos = df_h.groupby(["Movil", "Marca", "Ruta"], dropna=False).agg(
+                            viajes=("Consumo_L100", "count"),
+                            consumo_promedio=("Consumo_L100", "mean"),
+                            desvio_total=("Desvio_Neto", "sum"),
+                        ).round(2).reset_index().to_string(index=False)
+                    else:
+                        contexto_datos = "No hay registros disponibles."
+                    ctx = (
+                        "Eres un asistente de análisis de flota. Basa las conclusiones solo en los datos adjuntos; "
+                        "si no alcanzan para responder, dilo claramente. No diagnostiques fallas mecánicas como certezas. "
+                        "Sugiere inspección cuando los datos indiquen un consumo inusual.\n"
+                        f"Resumen de registros:\n{contexto_datos}"
+                    )
                     try:
                         response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
                         respuesta_final = response.text
                         st.session_state.ai_cache[pregunta] = respuesta_final # Guardamos en caché
                     except Exception as e:
-                        st.error("⚠️ Cuota agotada. Por favor, espera 1 minuto. El sistema está protegido.")
+                        st.error(f"No se pudo consultar Gemini: {e}")
                         st.stop()
         
         # Mostrar respuesta
@@ -341,52 +475,55 @@ with tabs[3]:
 # --- TAB 4: ANALÍTICA AVANZADA ---
 with tabs[4]:
     st.subheader("📈 Analítica y Diagnóstico")
-    
-    # Asegurar formato fecha para gráficos
-    df_ana = df_h.copy()
-    df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'], dayfirst=True)
-    df_ana['Mes'] = df_ana['Fecha'].dt.to_period('M').astype(str)
-
-    # 1. TENDENCIAS (Detectar desgaste mecánico)
-    st.markdown("### 📉 Tendencia de Consumo vs. Promedio Flota")
-    
-    # Calcular promedio general de la flota por mes para tener una referencia
-    df_promedio_flota = df_ana.groupby('Mes')['Consumo_L100'].mean().reset_index()
-    df_promedio_flota.rename(columns={'Consumo_L100': 'Promedio_Flota'}, inplace=True)
-
-    moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", 
-                                          options=sorted(df_ana['Movil'].unique()), 
-                                          default=[df_ana['Movil'].iloc[0]])
-    
-    if moviles_seleccionados:
-        df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
-        df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
-        
-        # Crear gráfico base
-        fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", 
-                           markers=True, template="plotly_dark",
-                           labels={"Consumo_L100": "Consumo (L/100km)", "Mes": "Periodo"})
-        
-        # Añadir la línea de promedio de la flota (punteada y gris)
-        fig_line.add_scatter(x=df_promedio_flota['Mes'], y=df_promedio_flota['Promedio_Flota'],
-                             mode='lines', name='Promedio Flota',
-                             line=dict(color='white', width=2, dash='dash'),
-                             hovertemplate="Promedio Flota: %{y:.1f} L/100")
-        
-        # Mejorar aspecto visual
-        fig_line.update_layout(hovermode="x unified", legend_title="Unidad")
-        
-        st.plotly_chart(fig_line, use_container_width=True)
-        
-        st.info("💡 **Cómo leer esto:** La línea punteada blanca representa el promedio de toda tu flota. Si la línea de tu móvil está **arriba** de la blanca, está consumiendo más que el promedio. Si está **abajo**, es más eficiente.")
+    if df_h.empty:
+        st.info("Todavía no hay registros para mostrar. Agrega un registro en la pestaña Registro.")
     else:
-        st.warning("Selecciona al menos un móvil para ver la tendencia.")
+        # Asegurar formato fecha para gráficos
+        df_ana = df_h.copy()
+        df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'], dayfirst=True)
+        df_ana['Mes'] = df_ana['Fecha'].dt.to_period('M').astype(str)
 
-    # 2. BENCHMARK (Marca/Modelo vs Ruta)
-    st.markdown("### ⚖️ Benchmark: Marca vs Ruta")
-    st.write("Comparativa de eficiencia según el tipo de terreno.")
-    
-    df_bench = df_ana.groupby(['Marca', 'Ruta'])['Consumo_L100'].mean().reset_index()
-    fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
-                     text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
-    st.plotly_chart(fig_bar, use_container_width=True)
+        # 1. TENDENCIAS (Detectar desgaste mecánico)
+        st.markdown("### 📉 Tendencia de Consumo vs. Promedio Flota")
+        
+        # Calcular promedio general de la flota por mes para tener una referencia
+        df_promedio_flota = df_ana.groupby('Mes')['Consumo_L100'].mean().reset_index()
+        df_promedio_flota.rename(columns={'Consumo_L100': 'Promedio_Flota'}, inplace=True)
+
+        moviles_seleccionados = st.multiselect("Seleccionar Móviles para comparar", 
+                                              options=sorted(df_ana['Movil'].unique()), 
+                                              default=[df_ana['Movil'].iloc[0]])
+        
+        if moviles_seleccionados:
+            df_tendencia = df_ana[df_ana['Movil'].isin(moviles_seleccionados)]
+            df_tendencia = df_tendencia.groupby(['Mes', 'Movil'])['Consumo_L100'].mean().reset_index()
+            
+            # Crear gráfico base
+            fig_line = px.line(df_tendencia, x="Mes", y="Consumo_L100", color="Movil", 
+                               markers=True, template="plotly_dark",
+                               labels={"Consumo_L100": "Consumo (L/100km)", "Mes": "Periodo"})
+            
+            # Añadir la línea de promedio de la flota (punteada y gris)
+            fig_line.add_scatter(x=df_promedio_flota['Mes'], y=df_promedio_flota['Promedio_Flota'],
+                                 mode='lines', name='Promedio Flota',
+                                 line=dict(color='white', width=2, dash='dash'),
+                                 hovertemplate="Promedio Flota: %{y:.1f} L/100")
+            
+            # Mejorar aspecto visual
+            fig_line.update_layout(hovermode="x unified", legend_title="Unidad")
+            
+            st.plotly_chart(fig_line, use_container_width=True)
+            
+            st.info("💡 **Cómo leer esto:** La línea punteada blanca representa el promedio de toda tu flota. Si la línea de tu móvil está **arriba** de la blanca, está consumiendo más que el promedio. Si está **abajo**, es más eficiente.")
+        else:
+            st.warning("Selecciona al menos un móvil para ver la tendencia.")
+
+        # 2. BENCHMARK (Marca/Modelo vs Ruta)
+        st.markdown("### ⚖️ Benchmark: Marca vs Ruta")
+        st.write("Comparativa de eficiencia según el tipo de terreno.")
+        
+        df_bench = df_ana.groupby(['Marca', 'Ruta'])['Consumo_L100'].mean().reset_index()
+        fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
+                         text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
+        st.plotly_chart(fig_bar, use_container_width=True)
+
