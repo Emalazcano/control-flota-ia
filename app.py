@@ -144,7 +144,7 @@ elif not lista_personal:
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
-tabs = st.tabs(["📝 Registro", "📜 Historial", "👁️ Ojo de Halcón", "📈 Analítica"])
+tabs = st.tabs(["📝 Registro", "📜 Historial", "👁️ Ojo de Halcón", "📈 Analítica", "📊 Informe mensual"])
 
 # --- TAB 0: REGISTRO ---
 with tabs[0]:
@@ -522,6 +522,110 @@ with tabs[3]:
         fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
                          text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
         st.plotly_chart(fig_bar, use_container_width=True)
+
+# --- TAB 4: INFORME MENSUAL ---
+with tabs[4]:
+    st.subheader("📊 Informe mensual de consumo")
+    st.caption("Resumen visual de litros, kilómetros y eficiencia a partir de los viajes registrados. Usa el ícono de cámara de cada gráfico para descargarlo como PNG.")
+
+    if df_h.empty:
+        st.info("Todavía no hay registros para armar el informe. Agrega viajes en la pestaña Registro.")
+    else:
+        df_rep = df_h.copy()
+        df_rep["Fecha"] = pd.to_datetime(df_rep.get("Fecha"), dayfirst=True, errors="coerce")
+        df_rep = df_rep[df_rep["Fecha"].notna()].copy()
+        if df_rep.empty:
+            st.info("No hay fechas válidas en los registros para agrupar por mes.")
+        else:
+            for col in ["L_Taller", "L_Ruta", "L_Tablero", "KM_Recorr", "KM_Ini", "KM_Fin"]:
+                if col not in df_rep:
+                    df_rep[col] = 0
+                df_rep[col] = pd.to_numeric(df_rep[col], errors="coerce").fillna(0)
+            if "KM_Recorr" not in df_rep or df_rep["KM_Recorr"].le(0).all():
+                df_rep["KM_Recorr"] = (df_rep["KM_Fin"] - df_rep["KM_Ini"]).clip(lower=0)
+            df_rep["KM_Recorr"] = df_rep["KM_Recorr"].where(df_rep["KM_Recorr"] > 0, (df_rep["KM_Fin"] - df_rep["KM_Ini"]).clip(lower=0))
+            df_rep["Litros_Total"] = df_rep["L_Taller"] + df_rep["L_Ruta"]
+            df_rep["Mes"] = df_rep["Fecha"].dt.to_period("M").astype(str)
+            for col, default in [("Marca", "Sin marca"), ("Ruta", "Sin ruta"), ("Movil", "Sin móvil"), ("Chofer", "Sin chofer")]:
+                if col not in df_rep:
+                    df_rep[col] = default
+                df_rep[col] = df_rep[col].fillna(default).astype(str)
+
+            meses = sorted(df_rep["Mes"].unique().tolist())
+            mes_sel = st.selectbox("Mes para los rankings", options=meses, index=len(meses)-1, key="informe_mes")
+            mes_df = df_rep[df_rep["Mes"] == mes_sel].copy()
+            km_total = mes_df["KM_Recorr"].sum()
+            litros_total = mes_df["Litros_Total"].sum()
+            promedio_flota = km_total / litros_total if litros_total > 0 else 0
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Litros cargados", f"{litros_total:,.0f} L")
+            k2.metric("Kilómetros recorridos", f"{km_total:,.0f} km")
+            k3.metric("Rendimiento ponderado", f"{promedio_flota:.2f} km/L")
+
+            chart_config = {"displayModeBar": True, "toImageButtonOptions": {"format": "png", "scale": 2}}
+            st.markdown("### ⛽ Litros cargados por mes")
+            mensual = df_rep.groupby("Mes", as_index=False).agg(Litros=("Litros_Total", "sum"))
+            fig_litros = px.area(mensual, x="Mes", y="Litros", markers=True, template="plotly_dark", title="Litros totales de la flota")
+            fig_litros.update_traces(line_color="#57A0E8", fillcolor="rgba(87,160,232,0.35)", hovertemplate="%{x}<br>%{y:,.0f} L<extra></extra>")
+            fig_litros.update_layout(yaxis_title="Litros", xaxis_title="Mes")
+            st.plotly_chart(fig_litros, use_container_width=True, config=chart_config)
+
+            st.markdown("### 🛢️ Cargas en taller y en ruta")
+            cargas = df_rep.groupby("Mes", as_index=False).agg(**{"Taller / cisterna": ("L_Taller", "sum"), "En ruta": ("L_Ruta", "sum")})
+            cargas_larga = cargas.melt(id_vars="Mes", var_name="Origen registrado", value_name="Litros")
+            fig_cargas = px.bar(cargas_larga, x="Mes", y="Litros", color="Origen registrado", barmode="group", text_auto=".0f", template="plotly_dark", title="Litros registrados por origen de carga")
+            fig_cargas.update_layout(yaxis_title="Litros", xaxis_title="Mes")
+            st.plotly_chart(fig_cargas, use_container_width=True, config=chart_config)
+
+            st.markdown("### 🚛 Rendimiento mensual por marca")
+            marca_mes = df_rep.groupby(["Mes", "Marca"], as_index=False).agg(Kilometros=("KM_Recorr", "sum"), Litros=("Litros_Total", "sum"))
+            marca_mes = marca_mes[marca_mes["Litros"] > 0].copy()
+            marca_mes["Rendimiento km/L"] = marca_mes["Kilometros"] / marca_mes["Litros"]
+            if not marca_mes.empty:
+                fig_marca = px.bar(marca_mes, x="Mes", y="Rendimiento km/L", color="Marca", barmode="group", text_auto=".2f", template="plotly_dark", title="Kilómetros por litro, ponderado por marca")
+                fig_marca.update_layout(yaxis_title="km/L", xaxis_title="Mes")
+                st.plotly_chart(fig_marca, use_container_width=True, config=chart_config)
+            else:
+                st.info("No hay datos suficientes de litros para calcular rendimiento por marca.")
+
+            st.markdown(f"### 🛣️ Kilómetros recorridos por tipo de ruta · {mes_sel}")
+            km_ruta = mes_df.groupby("Ruta", as_index=False)["KM_Recorr"].sum().sort_values("KM_Recorr", ascending=False)
+            fig_ruta = px.bar(km_ruta, x="Ruta", y="KM_Recorr", color="Ruta", text_auto=".0f", template="plotly_dark", title="Kilómetros por tipo de ruta")
+            fig_ruta.update_layout(yaxis_title="Kilómetros", xaxis_title="Tipo de ruta", showlegend=False)
+            st.plotly_chart(fig_ruta, use_container_width=True, config=chart_config)
+
+            st.markdown(f"### 🏅 Rendimiento por unidad · {mes_sel}")
+            unidad = mes_df.groupby(["Movil", "Marca"], as_index=False).agg(Kilometros=("KM_Recorr", "sum"), Litros=("Litros_Total", "sum"))
+            unidad = unidad[(unidad["Kilometros"] > 0) & (unidad["Litros"] > 0)].copy()
+            unidad["Rendimiento km/L"] = unidad["Kilometros"] / unidad["Litros"]
+            unidad = unidad.sort_values("Rendimiento km/L", ascending=True)
+            if not unidad.empty:
+                fig_unidad = px.bar(unidad, x="Rendimiento km/L", y="Movil", color="Marca", orientation="h", text_auto=".2f", template="plotly_dark", title="Ranking de unidades · más eficiente arriba")
+                fig_unidad.update_layout(xaxis_title="km/L (más alto = más eficiente)", yaxis_title="Móvil")
+                st.plotly_chart(fig_unidad, use_container_width=True, config=chart_config)
+            else:
+                st.info("No hay unidades con kilómetros y litros registrados en este mes.")
+
+            st.markdown(f"### 📍 Kilómetros por unidad y tipo de ruta · {mes_sel}")
+            km_unidad_ruta = mes_df.groupby(["Movil", "Ruta"], as_index=False)["KM_Recorr"].sum()
+            fig_unidad_ruta = px.bar(km_unidad_ruta, x="Movil", y="KM_Recorr", color="Ruta", barmode="stack", text_auto=".0f", template="plotly_dark", title="Distribución de kilómetros por unidad")
+            fig_unidad_ruta.update_layout(yaxis_title="Kilómetros", xaxis_title="Móvil")
+            st.plotly_chart(fig_unidad_ruta, use_container_width=True, config=chart_config)
+
+            st.markdown(f"### 👤 Ranking de kilómetros por chofer · {mes_sel}")
+            chofer = mes_df.groupby("Chofer", as_index=False)["KM_Recorr"].sum().sort_values("KM_Recorr", ascending=True)
+            fig_chofer = px.bar(chofer, x="KM_Recorr", y="Chofer", orientation="h", text_auto=".0f", template="plotly_dark", title="Kilómetros registrados por chofer")
+            fig_chofer.update_layout(xaxis_title="Kilómetros", yaxis_title="Chofer")
+            st.plotly_chart(fig_chofer, use_container_width=True, config=chart_config)
+
+            st.markdown(f"### 🚚 Ranking de kilómetros por unidad · {mes_sel}")
+            km_unidad = mes_df.groupby("Movil", as_index=False)["KM_Recorr"].sum().sort_values("KM_Recorr", ascending=True)
+            fig_km_unidad = px.bar(km_unidad, x="KM_Recorr", y="Movil", orientation="h", text_auto=".0f", template="plotly_dark", title="Kilómetros registrados por unidad")
+            fig_km_unidad.update_layout(xaxis_title="Kilómetros", yaxis_title="Móvil")
+            st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
+
+            st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
+
 
 
 
