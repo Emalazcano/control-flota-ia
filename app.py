@@ -137,6 +137,55 @@ def cargar_historial():
 df_h = cargar_historial()
 lista_personal = cargar_lista_choferes()
 
+def referencia_consumo_bajo(historial, movil, ruta, fecha, kilometros, litros):
+    """Compara el consumo del viaje con la mediana histórica de la misma unidad."""
+    if kilometros <= 0 or litros <= 0 or historial.empty or "Movil" not in historial.columns:
+        return None
+
+    anteriores = historial[historial["Movil"] == int(movil)].copy()
+    if "Fecha" in anteriores.columns:
+        anteriores = anteriores[anteriores["Fecha"] < pd.Timestamp(fecha)]
+    if anteriores.empty:
+        return None
+
+    km = pd.to_numeric(anteriores.get("KM_Recorr", 0), errors="coerce")
+    if not isinstance(km, pd.Series):
+        km = pd.Series(0, index=anteriores.index)
+    km = km.fillna(0)
+    if "KM_Ini" in anteriores and "KM_Fin" in anteriores:
+        km_respaldo = (pd.to_numeric(anteriores["KM_Fin"], errors="coerce").fillna(0) - pd.to_numeric(anteriores["KM_Ini"], errors="coerce").fillna(0)).clip(lower=0)
+        km = km.where(km > 0, km_respaldo)
+
+    taller = pd.to_numeric(anteriores.get("L_Taller", 0), errors="coerce")
+    ruta_litros = pd.to_numeric(anteriores.get("L_Ruta", 0), errors="coerce")
+    if not isinstance(taller, pd.Series):
+        taller = pd.Series(0, index=anteriores.index)
+    if not isinstance(ruta_litros, pd.Series):
+        ruta_litros = pd.Series(0, index=anteriores.index)
+    litros_previos = taller.fillna(0) + ruta_litros.fillna(0)
+    consumos = (litros_previos / km.where(km > 0) * 100).dropna()
+    consumos = consumos[consumos > 0]
+
+    if "Ruta" in anteriores.columns:
+        indices_ruta = anteriores.index[anteriores["Ruta"].astype(str) == str(ruta)]
+        consumo_ruta = consumos[consumos.index.isin(indices_ruta)]
+        if len(consumo_ruta) >= 3:
+            consumos = consumo_ruta
+    if len(consumos) < 3:
+        return None
+
+    mediana = float(consumos.median())
+    actual = litros / kilometros * 100
+    if actual <= mediana * 0.70 and mediana - actual >= 5:
+        etiqueta_ruta = f" en {ruta.lower()}" if "Ruta" in anteriores.columns and len(consumo_ruta) >= 3 else ""
+        return {
+            "actual": actual,
+            "mediana": mediana,
+            "muestras": len(consumos),
+            "mensaje": f"El promedio de este viaje ({actual:.1f} L/100 km) está más de un 30% por debajo de la mediana histórica de este móvil{etiqueta_ruta} ({mediana:.1f} L/100 km, {len(consumos)} viajes anteriores). Revisa los KM inicial/final y los litros cargados; podría ser un error de registro.",
+        }
+    return None
+
 if not lista_personal and not df_h.empty:
     lista_personal = sorted(df_h["Chofer"].unique().tolist())
 elif not lista_personal:
@@ -145,6 +194,19 @@ elif not lista_personal:
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
 tabs = st.tabs(["📝 Registro", "📜 Historial", "👁️ Ojo de Halcón", "📈 Analítica", "📊 Informe mensual"])
+
+def guardar_nuevo_registro(registro):
+    df_final = pd.concat([df_h, pd.DataFrame([registro])], ignore_index=True)
+    df_final["Fecha"] = pd.to_datetime(df_final["Fecha"], dayfirst=True, errors="coerce")
+    df_final["Fecha"] = df_final["Fecha"].dt.strftime("%d/%m/%Y")
+    try:
+        conn.update(spreadsheet=URL, data=df_final)
+        st.session_state.pop("registro_pendiente_revision", None)
+        st.success("✅ Registro guardado.")
+        time.sleep(1)
+        st.rerun()
+    except Exception as e:
+        st.error(f"No se pudo guardar el registro en Google Sheets: {e}")
 
 # --- TAB 0: REGISTRO ---
 with tabs[0]:
@@ -246,15 +308,29 @@ with tabs[0]:
             "Costo_Total_ARS": round(litros_cargados_total * precio_comb, 2),
             "Desvio_Neto": int(litros_cargados_total - ltab)
         }
-        
-        df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
-        df_final['Fecha'] = pd.to_datetime(df_final['Fecha'], dayfirst=True, errors='coerce')
-        df_final['Fecha'] = df_final['Fecha'].dt.strftime('%d/%m/%Y')
-        try:
-            conn.update(spreadsheet=URL, data=df_final)
-            st.success("✅ Guardado."); time.sleep(1); st.rerun()
-        except Exception as e:
-            st.error(f"No se pudo guardar el registro en Google Sheets: {e}")
+
+        alerta_consumo = referencia_consumo_bajo(
+            df_h, movil_sel, ruta_tipo, fecha_input, dist_final, litros_cargados_total
+        )
+        if alerta_consumo:
+            st.session_state["registro_pendiente_revision"] = {
+                "registro": nuevo_reg,
+                "mensaje": alerta_consumo["mensaje"],
+            }
+        else:
+            guardar_nuevo_registro(nuevo_reg)
+
+    pendiente_revision = st.session_state.get("registro_pendiente_revision")
+    if pendiente_revision:
+        with st.container(border=True):
+            st.warning("⚠️ Posible error en los datos. " + pendiente_revision["mensaje"])
+            st.caption("El registro quedó pendiente y todavía no se guardó. Puedes revisarlo/cancelarlo o confirmar que los datos son correctos.")
+            col_confirmar, col_cancelar = st.columns(2)
+            if col_confirmar.button("✅ Confirmar y guardar", use_container_width=True, key="confirmar_registro_bajo"):
+                guardar_nuevo_registro(pendiente_revision["registro"])
+            if col_cancelar.button("↩️ Cancelar este registro", use_container_width=True, key="cancelar_registro_bajo"):
+                st.session_state.pop("registro_pendiente_revision", None)
+                st.info("Registro cancelado. Puedes volver a cargar los datos.")
 
 # --- TAB 1: OJO DE HALCÓN ---
 with tabs[2]:
@@ -352,7 +428,8 @@ with tabs[2]:
                 fig_ranking.update_yaxes(autorange="reversed", title="")
                 fig_ranking.update_xaxes(title="Litros por 100 km (menos = mejor)", tickformat=".0f")
                 fig_ranking.update_layout(
-                    height=320,
+                    height=250,
+                    bargap=0.65,
                     margin=dict(l=10, r=90, t=10, b=10),
                     coloraxis_showscale=False,
                 )
@@ -625,6 +702,4 @@ with tabs[4]:
             st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
 
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
-
-
 
