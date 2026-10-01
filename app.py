@@ -212,9 +212,9 @@ def guardar_nuevo_registro(registro):
 with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
-    # Mantener el orden habitual de carga: móvil, chofer, fecha y luego tramo.
-    col_movil, _ = st.columns([1, 1])
-    movil_sel = col_movil.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
+    # Mantener el orden habitual y distribuir los datos básicos en una fila compacta.
+    col_movil, col_chofer, col_fecha, col_tramo = st.columns([0.8, 1.35, 1, 1.2])
+    movil_sel = col_movil.selectbox("🔢 Móvil", list(range(1, 101)), index=34, key="movil_selector")
     
     # 2. Lógica de recuperación de datos (fuera del formulario para que calcule al cambiar el móvil)
     km_sugerido = 0.0
@@ -235,18 +235,20 @@ with tabs[0]:
             if ult_r["Chofer"] in lista_personal:
                 idx_chofer = lista_personal.index(ult_r["Chofer"])
 
-    c_chofer, c_fecha = st.columns(2)
-    chofer = c_chofer.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
-    fecha_input = c_fecha.date_input("📅 Fecha de Carga", datetime.now(), key="fecha_registro")
-
+    chofer = col_chofer.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
+    fecha_input = col_fecha.date_input("📅 Fecha", datetime.now(), key="fecha_registro")
     traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
-    col_tramo, _ = st.columns([1, 1])
-    traza_sel = col_tramo.selectbox("🗺️ Tramo / recorrido", traza_ex, key="registro_tramo")
-    nt = col_tramo.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper() if traza_sel == "➕ NUEVA" else ""
+    traza_sel = col_tramo.selectbox("🗺️ Tramo", traza_ex, key="registro_tramo")
+    if traza_sel == "➕ NUEVA":
+        col_nombre_tramo, _ = st.columns([1.2, 2.8])
+        nt = col_nombre_tramo.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper()
+    else:
+        nt = ""
     t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
 
-    # Fuera del formulario para que los campos específicos del tablero cambien al seleccionar la marca.
-    marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
+    # Marca y tipo de ruta comparten una fila; ambos se actualizan sin enviar el formulario.
+    col_marca, col_tipo_ruta = st.columns([1, 2])
+    marca = col_marca.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
 
     # Infere el tipo de ruta por mayoría de registros previos del mismo tramo.
     ruta_tipo = None
@@ -260,39 +262,34 @@ with tabs[0]:
 
     if ruta_detectada in ["Llano", "Alta Montaña"]:
         ruta_tipo = ruta_detectada
-        st.info(f"🏔️ Tipo de ruta detectado: **{ruta_tipo}** según {int(conteo_rutas.sum())} registros anteriores de este tramo ({int(conteo_rutas.get('Llano', 0))} Llano · {int(conteo_rutas.get('Alta Montaña', 0))} Alta Montaña).")
+        col_tipo_ruta.info(f"🏔️ Ruta: **{ruta_tipo}** · {int(conteo_rutas.sum())} registros previos")
     else:
         if t_final and not historial_tramo.empty:
-            st.warning("No hay una clasificación histórica clara para este tramo. Selecciona el tipo de ruta manualmente.")
+            col_tipo_ruta.warning("Sin mayoría clara. Elige la ruta manualmente.")
         elif t_final:
-            st.info("Este tramo todavía no tiene registros anteriores. Indica el tipo de ruta para guardar su clasificación.")
-        ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True, key="registro_tipo_ruta_manual")
+            col_tipo_ruta.info("Tramo nuevo: indica el tipo de ruta.")
+        ruta_tipo = col_tipo_ruta.radio("🏔️ Tipo de ruta", ["Llano", "Alta Montaña"], horizontal=True, key="registro_tipo_ruta_manual")
 
     # 3. Formulario con KEYS dinámicos (esto fuerza el refresco de los widgets)
     with st.form("registro_form_v2", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
-        
-        with c2:
-            st.markdown(f"**Tipo de ruta aplicado:** {ruta_tipo}")
-            st.markdown(f"**Tramo:** {t_final or 'Pendiente de nombre'}")
-        
-        with c3:
-            kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
-            kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
-            l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, step=1.0, format="%.0f", help="Combustible cargado en la cisterna de la empresa.")
-            l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, step=1.0, format="%.0f", help="Combustible cargado fuera de la empresa durante el viaje.")
-            if marca == "MERCEDES BENZ":
-                promedio_tablero = st.number_input("📈 Promedio del tablero (L/100 km)", min_value=0.0, value=0.0, key=f"prom_tab_{movil_sel}")
-                distancia_tablero = max(kmf - kmi, 0)
-                ltab = int(round(promedio_tablero * distancia_tablero / 100))
-                st.caption(f"Litros consumidos estimados en el período: {ltab} L")
-                lral = st.number_input("⏳ Litros de ralentí (opcional)", min_value=0.0, value=0.0, step=1.0, format="%.0f", key=f"ral_{movil_sel}")
-            else:
-                promedio_tablero = None
-                ltab = st.number_input("📟 Litros consumidos según tablero", min_value=0.0, value=0.0, step=1.0, format="%.0f")
-                lral = st.number_input("⏳ Litros consumidos en ralentí", min_value=0.0, value=0.0, step=1.0, format="%.0f")
+        campos_base = st.columns(4)
+        precio_comb = campos_base[0].number_input("💰 Precio por litro", value=float(st.session_state["precio_gasoil"]))
+        kmi = campos_base[1].number_input("🛣️ KM inicial", value=int(km_sugerido), step=1, format="%d")
+        kmf = campos_base[2].number_input("🏁 KM final", value=0, step=1, format="%d")
+        l_taller = campos_base[3].number_input("⛽ Litros taller / cisterna", min_value=0.0, value=0.0, step=1.0, format="%.0f", help="Combustible cargado en la cisterna de la empresa.")
+
+        campos_combustible = st.columns(3)
+        l_ruta = campos_combustible[0].number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, step=1.0, format="%.0f", help="Combustible cargado fuera de la empresa durante el viaje.")
+        if marca == "MERCEDES BENZ":
+            promedio_tablero = campos_combustible[1].number_input("📈 Promedio tablero (L/100 km)", min_value=0.0, value=0.0, key=f"prom_tab_{movil_sel}")
+            distancia_tablero = max(kmf - kmi, 0)
+            ltab = int(round(promedio_tablero * distancia_tablero / 100))
+            campos_combustible[1].caption(f"Consumo estimado: {ltab} L")
+            lral = campos_combustible[2].number_input("⏳ Litros de ralentí", min_value=0.0, value=0.0, step=1.0, format="%.0f", key=f"ral_{movil_sel}")
+        else:
+            promedio_tablero = None
+            ltab = campos_combustible[1].number_input("📟 Litros consumidos según tablero", min_value=0.0, value=0.0, step=1.0, format="%.0f")
+            lral = campos_combustible[2].number_input("⏳ Litros de ralentí", min_value=0.0, value=0.0, step=1.0, format="%.0f")
 
         # Redondear las cantidades registradas al litro más cercano.
         l_taller, l_ruta, ltab, lral = [int(round(v)) for v in (l_taller, l_ruta, ltab, lral)]
@@ -727,6 +724,7 @@ with tabs[4]:
             st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
 
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
+
 
 
 
