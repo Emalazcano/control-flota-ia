@@ -306,13 +306,6 @@ with tabs[1]:
         df_filtrado["Desvio_Ajustado"] = df_filtrado["Desvio_Tras_Sesgo"] - df_filtrado["Margen_Cisterna"] * df_filtrado["Desvio_Tras_Sesgo"].gt(df_filtrado["Margen_Cisterna"]).astype(int) + df_filtrado["Margen_Cisterna"] * df_filtrado["Desvio_Tras_Sesgo"].lt(-df_filtrado["Margen_Cisterna"]).astype(int)
         df_filtrado.loc[~fuera_margen, "Desvio_Ajustado"] = 0
         df_filtrado["Desvio_Ajustado_Abs"] = df_filtrado["Desvio_Ajustado"].abs()
-        csv = df_filtrado.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Descargar reporte filtrado (CSV)",
-            data=csv,
-            file_name='reporte_flota.csv',
-            mime='text/csv',    
-        )
         st.divider()
         st.subheader("🏆 Ranking mensual de eficiencia (Top 5 por mes)")
         st.caption("Cada barra muestra cuántos litros usa el camión para recorrer 100 km. Menos litros por 100 km significa mejor eficiencia. El cálculo usa litros cargados ÷ kilómetros recorridos; la tolerancia de la cisterna puede influir en el promedio.")
@@ -529,8 +522,6 @@ with tabs[3]:
         fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
                          text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
         st.plotly_chart(fig_bar, use_container_width=True)
-
-
 
 
 
