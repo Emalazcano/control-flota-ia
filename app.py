@@ -213,7 +213,8 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
     # Mantener el orden habitual de carga: móvil, chofer, fecha y luego tramo.
-    movil_sel = st.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
+    col_movil, _ = st.columns([1, 1])
+    movil_sel = col_movil.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
     
     # 2. Lógica de recuperación de datos (fuera del formulario para que calcule al cambiar el móvil)
     km_sugerido = 0.0
@@ -239,8 +240,9 @@ with tabs[0]:
     fecha_input = c_fecha.date_input("📅 Fecha de Carga", datetime.now(), key="fecha_registro")
 
     traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
-    traza_sel = st.selectbox("🗺️ Tramo / recorrido", traza_ex, key="registro_tramo")
-    nt = st.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper() if traza_sel == "➕ NUEVA" else ""
+    col_tramo, _ = st.columns([1, 1])
+    traza_sel = col_tramo.selectbox("🗺️ Tramo / recorrido", traza_ex, key="registro_tramo")
+    nt = col_tramo.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper() if traza_sel == "➕ NUEVA" else ""
     t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
 
     # Fuera del formulario para que los campos específicos del tablero cambien al seleccionar la marca.
@@ -725,6 +727,5 @@ with tabs[4]:
             st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
 
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
-
 
 
