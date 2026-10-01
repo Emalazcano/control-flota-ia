@@ -271,7 +271,9 @@ with tabs[1]:
         df_ana["KM_Recorr"] = pd.to_numeric(df_ana["KM_Recorr"], errors="coerce").fillna(0).clip(lower=0)
         st.markdown("### 🔍 Filtros")
         c_f1, c_f2 = st.columns(2)
-        mes_sel = c_f1.selectbox("📅 Mes", ["Todos"] + sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True))
+        meses_disponibles = sorted(df_ana['Mes_Año'].unique().tolist(), reverse=True)
+        opciones_mes = ["Todos"] + meses_disponibles
+        mes_sel = c_f1.selectbox("📅 Mes", opciones_mes, index=1 if meses_disponibles else 0)
         ruta_sel = c_f2.multiselect("🏔️ Ruta", df_ana['Ruta'].unique(), default=df_ana['Ruta'].unique())
         df_filtrado = df_ana[df_ana['Ruta'].isin(ruta_sel)]
         if mes_sel != "Todos": df_filtrado = df_filtrado[df_filtrado['Mes_Año'] == mes_sel]
@@ -313,7 +315,7 @@ with tabs[1]:
         )
         st.divider()
         st.subheader("🏆 Ranking mensual de eficiencia (Top 5 por mes)")
-        st.caption("Consumo ponderado = litros cargados en taller y en ruta ÷ kilómetros recorridos × 100. Cada mes se calcula por separado. El promedio usa los litros registrados, por lo que el posible error de la cisterna también puede influir en este ranking.")
+        st.caption("Cada barra muestra cuántos litros usa el camión para recorrer 100 km. Menos litros por 100 km significa mejor eficiencia. El cálculo usa litros cargados ÷ kilómetros recorridos; la tolerancia de la cisterna puede influir en el promedio.")
         ranking_mensual = df_filtrado.groupby(["Mes_Año", "Chofer"], dropna=False).agg(
             Litros_Cargados=("Litros_Cargados_Total", "sum"),
             KM_Recorridos=("KM_Recorr", "sum"),
@@ -326,17 +328,50 @@ with tabs[1]:
         if ranking_mensual.empty:
             st.info("No hay kilómetros válidos para calcular el ranking.")
         else:
-            ranking_vista = ranking_mensual.rename(columns={
-                "Mes_Año": "Mes", "Puesto": "Puesto", "Chofer": "Chofer",
-                "Promedio_L_100km": "Promedio (L/100 km)", "Viajes": "Viajes",
-                "KM_Recorridos": "Kilómetros", "Litros_Cargados": "Litros cargados",
-            }).copy()
-            ranking_vista["Promedio (L/100 km)"] = ranking_vista["Promedio (L/100 km)"].round().astype(int)
-            st.dataframe(
-                ranking_vista[["Mes", "Puesto", "Chofer", "Promedio (L/100 km)", "Viajes", "Kilómetros", "Litros cargados"]],
-                use_container_width=True,
-                hide_index=True,
-            )
+            medallas = ["🥇", "🥈", "🥉"]
+
+            def mostrar_ranking_mes(datos_mes):
+                datos_mes = datos_mes.sort_values("Promedio_L_100km", ascending=True).reset_index(drop=True)
+                tarjetas = st.columns(3)
+                for i, fila in datos_mes.head(3).iterrows():
+                    tarjetas[i].metric(
+                        label=f"{medallas[i]} Puesto {i + 1}: {fila['Chofer']}",
+                        value=f"{fila['Promedio_L_100km']:.0f} L/100 km",
+                        delta=f"{int(fila['Viajes'])} viajes · {fila['KM_Recorridos']:,.0f} km",
+                        delta_color="off",
+                    )
+
+                grafico_ranking = datos_mes.copy()
+                grafico_ranking["Etiqueta"] = grafico_ranking["Promedio_L_100km"].round().astype(int).astype(str)
+                fig_ranking = px.bar(
+                    grafico_ranking,
+                    x="Promedio_L_100km",
+                    y="Chofer",
+                    orientation="h",
+                    color="Promedio_L_100km",
+                    color_continuous_scale="RdYlGn_r",
+                    text="Etiqueta",
+                    hover_data={"Viajes": True, "KM_Recorridos": ":,.0f", "Litros_Cargados": ":,.0f", "Promedio_L_100km": ":.2f", "Etiqueta": False},
+                    labels={"Promedio_L_100km": "L/100 km", "Chofer": "Chofer"},
+                    template="plotly_dark",
+                )
+                fig_ranking.update_traces(texttemplate="%{text} L/100 km", textposition="outside", cliponaxis=False)
+                fig_ranking.update_yaxes(autorange="reversed", title="")
+                fig_ranking.update_xaxes(title="Litros por 100 km (menos = mejor)", tickformat=".0f")
+                fig_ranking.update_layout(
+                    height=320,
+                    margin=dict(l=10, r=90, t=10, b=10),
+                    coloraxis_showscale=False,
+                )
+                st.plotly_chart(fig_ranking, use_container_width=True)
+
+            meses_ranking = sorted(ranking_mensual["Mes_Año"].unique().tolist(), reverse=True)
+            if mes_sel == "Todos":
+                for i, mes in enumerate(meses_ranking):
+                    with st.expander(f"📅 {mes}", expanded=(i == 0)):
+                        mostrar_ranking_mes(ranking_mensual[ranking_mensual["Mes_Año"] == mes])
+            else:
+                mostrar_ranking_mes(ranking_mensual[ranking_mensual["Mes_Año"] == mes_sel])
 
         st.divider()
         st.subheader("⚠️ Desvíos por chofer y mes")
@@ -494,6 +529,7 @@ with tabs[3]:
         fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
                          text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
         st.plotly_chart(fig_bar, use_container_width=True)
+
 
 
 
