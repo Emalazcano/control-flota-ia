@@ -238,6 +238,31 @@ with tabs[0]:
     # Fuera del formulario para que los campos de tablero cambien al seleccionar la marca.
     marca = col_m2.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
 
+    traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
+    traza_sel = st.selectbox("🗺️ Tramo / recorrido", traza_ex, key="registro_tramo")
+    nt = st.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper() if traza_sel == "➕ NUEVA" else ""
+    t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
+
+    # Infere el tipo de ruta por mayoría de registros previos del mismo tramo.
+    ruta_tipo = None
+    historial_tramo = pd.DataFrame()
+    if t_final and not df_h.empty and "Traza" in df_h.columns and "Ruta" in df_h.columns:
+        historial_tramo = df_h[df_h["Traza"].astype(str).str.strip() == t_final].copy()
+    conteo_rutas = historial_tramo["Ruta"].dropna().astype(str).value_counts() if not historial_tramo.empty else pd.Series(dtype=int)
+    ruta_detectada = None
+    if int(conteo_rutas.sum()) >= 2 and len(conteo_rutas) > 0 and conteo_rutas.iloc[0] > (conteo_rutas.iloc[1] if len(conteo_rutas) > 1 else 0):
+        ruta_detectada = conteo_rutas.index[0]
+
+    if ruta_detectada in ["Llano", "Alta Montaña"]:
+        ruta_tipo = ruta_detectada
+        st.info(f"🏔️ Tipo de ruta detectado: **{ruta_tipo}** según {int(conteo_rutas.sum())} registros anteriores de este tramo ({int(conteo_rutas.get('Llano', 0))} Llano · {int(conteo_rutas.get('Alta Montaña', 0))} Alta Montaña).")
+    else:
+        if t_final and not historial_tramo.empty:
+            st.warning("No hay una clasificación histórica clara para este tramo. Selecciona el tipo de ruta manualmente.")
+        elif t_final:
+            st.info("Este tramo todavía no tiene registros anteriores. Indica el tipo de ruta para guardar su clasificación.")
+        ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True, key="registro_tipo_ruta_manual")
+
     # 3. Formulario con KEYS dinámicos (esto fuerza el refresco de los widgets)
     with st.form("registro_form_v2", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
@@ -247,11 +272,8 @@ with tabs[0]:
             fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
         
         with c2:
-            ruta_tipo = st.radio("🏔️ Tipo de Ruta", ["Llano", "Alta Montaña"], horizontal=True)
-            traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
-            traza_sel = st.selectbox("🗺️ Traza", traza_ex)
-            nt = st.text_input("✍️ Nombre Nueva Traza").upper()
-            t_final = nt if (traza_sel == "➕ NUEVA") else traza_sel
+            st.markdown(f"**Tipo de ruta aplicado:** {ruta_tipo}")
+            st.markdown(f"**Tramo:** {t_final or 'Pendiente de nombre'}")
         
         with c3:
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
@@ -702,4 +724,5 @@ with tabs[4]:
             st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
 
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
+
 
