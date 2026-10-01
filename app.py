@@ -144,7 +144,7 @@ elif not lista_personal:
 
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
-tabs = st.tabs(["📝 Registro", "👁️ Ojo de Halcón", "📜 Historial", "📈 Analítica"])
+tabs = st.tabs(["📝 Registro", "📜 Historial", "👁️ Ojo de Halcón", "📈 Analítica"])
 
 # --- TAB 0: REGISTRO ---
 with tabs[0]:
@@ -257,7 +257,7 @@ with tabs[0]:
             st.error(f"No se pudo guardar el registro en Google Sheets: {e}")
 
 # --- TAB 1: OJO DE HALCÓN ---
-with tabs[1]:
+with tabs[2]:
     if not df_h.empty:
         df_ana = df_h.copy()
         df_ana['Fecha'] = pd.to_datetime(df_ana['Fecha'])
@@ -459,7 +459,7 @@ with tabs[1]:
         st.info("Todavía no hay registros para analizar.")
 
 # --- TAB 2: HISTORIAL ---
-with tabs[2]:
+with tabs[1]:
     if not df_h.empty:
         df_v = df_h.copy().sort_values("Fecha", ascending=False)
         # Aquí formateamos la fecha a DD/MM/YYYY para que no se vea la hora
