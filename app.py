@@ -197,12 +197,10 @@ with tabs[0]:
             l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, help="Combustible cargado en la cisterna de la empresa.")
             l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, help="Combustible cargado fuera de la empresa durante el viaje.")
             if marca == "MERCEDES BENZ":
-                st.caption("Ingresa el promedio que muestra el tablero desde reset. Se usarán los KM Inicial y KM Final de este registro para estimar los litros del viaje.")
                 promedio_tablero = st.number_input("📈 Promedio del tablero (L/100 km)", min_value=0.0, value=0.0, key=f"prom_tab_{movil_sel}")
                 distancia_tablero = max(kmf - kmi, 0)
                 ltab = promedio_tablero * distancia_tablero / 100
                 st.caption(f"Litros consumidos estimados en el período: {ltab:.1f} L")
-                st.caption("El ralentí ya está incluido en el promedio general. Si tienes una medición independiente, puedes anotarla aquí; no se suma otra vez al consumo.")
                 lral = st.number_input("⏳ Litros de ralentí (opcional)", min_value=0.0, value=0.0, key=f"ral_{movil_sel}")
             else:
                 promedio_tablero = None
