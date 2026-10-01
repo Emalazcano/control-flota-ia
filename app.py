@@ -44,6 +44,8 @@ st.markdown("""
     }
     .driver-name { font-weight: bold; font-size: 14px; }
     .driver-score { font-size: 20px; color: #4a90e2; }
+    /* Ocultar los botones +/- de los campos numéricos; se conservan los inputs editables. */
+    div[data-testid="stNumberInput"] button { display: none !important; }
     </style>
 """, unsafe_allow_html=True)
 
