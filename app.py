@@ -5,7 +5,7 @@ import plotly.express as px
 from datetime import datetime
 import time
 import os
-import google.generativeai as genai
+from google import genai
 
 # Debe ejecutarse antes de cualquier otro comando de Streamlit.
 st.set_page_config(page_title="Inteligencia de Flota Jujuy", layout="wide")
@@ -52,11 +52,11 @@ st.markdown("""
 # --- CONFIGURACIÓN DE IA GEMINI ---
 if "GOOGLE_API_KEY" in st.secrets:
     api_key_final = st.secrets["GOOGLE_API_KEY"].strip().strip('"')
-    genai.configure(api_key=api_key_final)
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    gemini_client = genai.Client(api_key=api_key_final)
+    GEMINI_MODEL = "gemini-3.8-flash"
 else:
     st.warning("⚠️ Clave API no detectada en Secrets.")
-    model = None
+    gemini_client = None
 
 st.markdown("""
     <style>
@@ -118,7 +118,7 @@ def cargar_historial():
         if "L_Ruta" not in df.columns:
             df["L_Ruta"] = 0
 
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti", "Lectura_Tablero_L_Inicial", "Lectura_Tablero_L_Final", "Lectura_Ralenti_L_Inicial", "Lectura_Ralenti_L_Final", "KM_Tablero_Reset_Inicial", "Promedio_Tablero_L100_Inicial", "KM_Tablero_Reset_Final", "Promedio_Tablero_L100_Final", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -151,7 +151,7 @@ with tabs[0]:
     st.subheader("📝 Nuevo Registro")
     
     # 1. Selector de móvil fuera del formulario para que detecte el cambio al instante
-    col_m1, _ = st.columns([1, 2])
+    col_m1, col_m2, _ = st.columns([1, 1, 1])
     movil_sel = col_m1.selectbox("🔢 Selecciona Móvil", list(range(1, 101)), index=34, key="movil_selector")
     
     # 2. Lógica de recuperación de datos (fuera del formulario para que calcule al cambiar el móvil)
@@ -173,12 +173,13 @@ with tabs[0]:
             if ult_r["Chofer"] in lista_personal:
                 idx_chofer = lista_personal.index(ult_r["Chofer"])
 
+    # Fuera del formulario para que los campos de tablero cambien al seleccionar la marca.
+    marca = col_m2.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
+
     # 3. Formulario con KEYS dinámicos (esto fuerza el refresco de los widgets)
     with st.form("registro_form_v2", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
-            # Usamos el key dinámico basado en movil_sel para forzar actualización
-            marca = st.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
             chofer = st.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
             precio_comb = st.number_input("💰 Precio Litro Gasoil", value=float(st.session_state["precio_gasoil"]))
             fecha_input = st.date_input("📅 Fecha de Carga", datetime.now())
@@ -195,8 +196,22 @@ with tabs[0]:
             kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
             l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, help="Combustible cargado en la cisterna de la empresa.")
             l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, help="Combustible cargado fuera de la empresa durante el viaje.")
-            ltab = st.number_input("📟 Litros Tablero", value=0.0)
-            lral = st.number_input("⏳ Litros Ralentí", value=0.0)
+            if marca == "MERCEDES BENZ":
+                st.caption("El tablero muestra promedio en L/100 km y kilómetros desde reset. Toma ambas lecturas al inicio y al final del período que estás registrando.")
+                km_tablero_ini = st.number_input("📟 KM desde reset al inicio", min_value=0.0, value=0.0, key=f"tab_km_ini_{movil_sel}")
+                promedio_tablero_ini = st.number_input("📈 Promedio al inicio (L/100 km)", min_value=0.0, value=0.0, key=f"tab_prom_ini_{movil_sel}")
+                km_tablero_fin = st.number_input("📟 KM desde reset al final", min_value=0.0, value=0.0, key=f"tab_km_fin_{movil_sel}")
+                promedio_tablero_fin = st.number_input("📈 Promedio al final (L/100 km)", min_value=0.0, value=0.0, key=f"tab_prom_fin_{movil_sel}")
+                litros_tablero_ini = km_tablero_ini * promedio_tablero_ini / 100
+                litros_tablero_fin = km_tablero_fin * promedio_tablero_fin / 100
+                ltab = litros_tablero_fin - litros_tablero_ini
+                st.caption(f"Litros consumidos estimados en el período: {ltab:.1f} L")
+                st.caption("El ralentí ya está incluido en el promedio general. Si tienes una medición independiente, puedes anotarla aquí; no se suma otra vez al consumo.")
+                lral = st.number_input("⏳ Litros de ralentí (opcional)", min_value=0.0, value=0.0, key=f"ral_{movil_sel}")
+            else:
+                km_tablero_ini = promedio_tablero_ini = km_tablero_fin = promedio_tablero_fin = None
+                ltab = st.number_input("📟 Litros consumidos según tablero", min_value=0.0, value=0.0)
+                lral = st.number_input("⏳ Litros consumidos en ralentí", min_value=0.0, value=0.0)
 
         # Métricas visuales
         dist_v = int(kmf - kmi) if kmf > kmi else 0
@@ -216,8 +231,15 @@ with tabs[0]:
         # Validar datos antes de escribir en la hoja.
         if kmf <= kmi:
             st.error("⚠️ El KM Final debe ser mayor al Inicial."); st.stop()
-        if precio_comb <= 0 or litros_cargados_total <= 0 or ltab < 0 or lral < 0:
+        if precio_comb <= 0 or litros_cargados_total <= 0 or lral < 0:
             st.error("⚠️ El precio debe ser positivo, registra litros cargados en taller o en ruta y no ingreses litros negativos."); st.stop()
+        if marca == "MERCEDES BENZ":
+            if km_tablero_fin <= km_tablero_ini or promedio_tablero_fin <= 0:
+                st.error("⚠️ Ingresa kilómetros desde reset crecientes y un promedio final mayor que cero."); st.stop()
+            if km_tablero_ini > 0 and promedio_tablero_ini <= 0:
+                st.error("⚠️ Si el contador ya tenía kilómetros al inicio, ingresa también el promedio inicial."); st.stop()
+            if ltab < 0:
+                st.error("⚠️ Los litros estimados del tablero no pueden ser negativos. Verifica las lecturas y que no haya habido un reset durante el período."); st.stop()
         if traza_sel == "➕ NUEVA" and not nt.strip():
             st.error("⚠️ Escribe el nombre de la nueva traza."); st.stop()
         
@@ -226,6 +248,8 @@ with tabs[0]:
             "Fecha": fecha_input.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
             "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist_final,
             "L_Taller": l_taller, "L_Ruta": l_ruta, "L_Tablero": ltab, "L_Ralenti": lral,
+            "KM_Tablero_Reset_Inicial": km_tablero_ini, "Promedio_Tablero_L100_Inicial": promedio_tablero_ini,
+            "KM_Tablero_Reset_Final": km_tablero_fin, "Promedio_Tablero_L100_Final": promedio_tablero_fin,
             "Consumo_L100": round((litros_cargados_total/dist_final*100 if dist_final > 0 else 0), 2),
             "Costo_Total_ARS": round(litros_cargados_total * precio_comb, 2),
             "Desvio_Neto": round(litros_cargados_total - ltab, 2)
@@ -432,7 +456,7 @@ with tabs[3]:
 
     pregunta = pregunta_rapida if pregunta_rapida else pregunta_input
     
-    if (btn_enviar or pregunta_rapida) and pregunta and model:
+    if (btn_enviar or pregunta_rapida) and pregunta and gemini_client:
         # Lógica de CACHÉ: Si ya preguntaste esto, no gastamos cuota
         if pregunta in st.session_state.ai_cache:
             respuesta_final = st.session_state.ai_cache[pregunta]
@@ -460,8 +484,11 @@ with tabs[3]:
                         f"Resumen de registros:\n{contexto_datos}"
                     )
                     try:
-                        response = model.generate_content(f"{ctx}\nPregunta: {pregunta}")
-                        respuesta_final = response.text
+                        response = gemini_client.interactions.create(
+                            model=GEMINI_MODEL,
+                            input=f"{ctx}\nPregunta: {pregunta}",
+                        )
+                        respuesta_final = response.output_text or "Gemini no devolvió una respuesta de texto."
                         st.session_state.ai_cache[pregunta] = respuesta_final # Guardamos en caché
                     except Exception as e:
                         st.error(f"No se pudo consultar Gemini: {e}")
