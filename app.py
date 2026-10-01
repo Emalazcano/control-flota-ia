@@ -326,12 +326,14 @@ with tabs[1]:
         if ranking_mensual.empty:
             st.info("No hay kilómetros válidos para calcular el ranking.")
         else:
+            ranking_vista = ranking_mensual.rename(columns={
+                "Mes_Año": "Mes", "Puesto": "Puesto", "Chofer": "Chofer",
+                "Promedio_L_100km": "Promedio (L/100 km)", "Viajes": "Viajes",
+                "KM_Recorridos": "Kilómetros", "Litros_Cargados": "Litros cargados",
+            }).copy()
+            ranking_vista["Promedio (L/100 km)"] = ranking_vista["Promedio (L/100 km)"].round().astype(int)
             st.dataframe(
-                ranking_mensual.rename(columns={
-                    "Mes_Año": "Mes", "Puesto": "Puesto", "Chofer": "Chofer",
-                    "Promedio_L_100km": "Promedio (L/100 km)", "Viajes": "Viajes",
-                    "KM_Recorridos": "Kilómetros", "Litros_Cargados": "Litros cargados",
-                })[["Mes", "Puesto", "Chofer", "Promedio (L/100 km)", "Viajes", "Kilómetros", "Litros cargados"]],
+                ranking_vista[["Mes", "Puesto", "Chofer", "Promedio (L/100 km)", "Viajes", "Kilómetros", "Litros cargados"]],
                 use_container_width=True,
                 hide_index=True,
             )
@@ -492,6 +494,7 @@ with tabs[3]:
         fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
                          text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
         st.plotly_chart(fig_bar, use_container_width=True)
+
 
 
 
