@@ -191,6 +191,16 @@ if not lista_personal and not df_h.empty:
 elif not lista_personal:
     lista_personal = ["NUEVO"]
 
+# Limpiar los selectores externos al formulario después de guardar con éxito.
+movil_a_limpiar = st.session_state.pop("limpiar_selectores_registro", None)
+if movil_a_limpiar is not None:
+    st.session_state[f"c_{movil_a_limpiar}"] = "Seleccionar chofer"
+    st.session_state["fecha_registro"] = datetime.now().date()
+    st.session_state["registro_tramo"] = "Seleccionar tramo"
+    st.session_state["registro_nuevo_tramo"] = ""
+    st.session_state[f"m_{movil_a_limpiar}"] = "Seleccionar marca"
+    st.session_state["registro_tipo_ruta_manual"] = "Seleccionar ruta"
+
 # --- 4. INTERFAZ ---
 st.title("🚚 Inteligencia de Flota y Costos")
 tabs = st.tabs(["📝 Registro", "📜 Historial", "👁️ Ojo de Halcón", "📈 Analítica", "📊 Informe mensual"])
@@ -202,6 +212,7 @@ def guardar_nuevo_registro(registro):
     try:
         conn.update(spreadsheet=URL, data=df_final)
         st.session_state.pop("registro_pendiente_revision", None)
+        st.session_state["limpiar_selectores_registro"] = registro.get("Movil")
         st.success("✅ Registro guardado.")
         time.sleep(1)
         st.rerun()
@@ -232,17 +243,20 @@ with tabs[0]:
                 if ult_r["Chofer"] in lista_personal:
                     idx_chofer = lista_personal.index(ult_r["Chofer"])
 
-        chofer = col_chofer.selectbox("👤 Chofer", options=lista_personal, index=idx_chofer, key=f"c_{movil_sel}")
+        chofer = col_chofer.selectbox(
+            "👤 Chofer", options=["Seleccionar chofer"] + lista_personal,
+            index=idx_chofer + 1, key=f"c_{movil_sel}"
+        )
         fecha_input = col_fecha.date_input("📅 Fecha", datetime.now(), key="fecha_registro")
 
         col_tramo, col_nombre_tramo = st.columns([1.2, 1.2])
-        traza_ex = ["➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
+        traza_ex = ["Seleccionar tramo", "➕ NUEVA"] + (sorted(df_h["Traza"].dropna().astype(str).unique().tolist()) if not df_h.empty and "Traza" in df_h.columns else [])
         traza_sel = col_tramo.selectbox("🗺️ Tramo", traza_ex, key="registro_tramo")
         if traza_sel == "➕ NUEVA":
             nt = col_nombre_tramo.text_input("✍️ Nombre del nuevo tramo", key="registro_nuevo_tramo").strip().upper()
         else:
             nt = ""
-        t_final = nt if traza_sel == "➕ NUEVA" else traza_sel
+        t_final = nt if traza_sel == "➕ NUEVA" else ("" if traza_sel == "Seleccionar tramo" else traza_sel)
 
         col_tipo_ruta, col_marca = st.columns([1.2, 1.2])
         historial_tramo = pd.DataFrame()
@@ -253,7 +267,10 @@ with tabs[0]:
         if int(conteo_rutas.sum()) >= 2 and len(conteo_rutas) > 0 and conteo_rutas.iloc[0] > (conteo_rutas.iloc[1] if len(conteo_rutas) > 1 else 0):
             ruta_detectada = conteo_rutas.index[0]
 
-        if ruta_detectada in ["Llano", "Alta Montaña"]:
+        if not t_final:
+            ruta_tipo = "Seleccionar ruta"
+            col_tipo_ruta.caption("Elige un tramo para detectar la ruta.")
+        elif ruta_detectada in ["Llano", "Alta Montaña"]:
             ruta_tipo = ruta_detectada
             col_tipo_ruta.info(f"🏔️ Tipo de ruta: **{ruta_tipo}** · {int(conteo_rutas.sum())} registros previos")
         else:
@@ -261,9 +278,10 @@ with tabs[0]:
                 col_tipo_ruta.warning("Sin mayoría clara. Elige la ruta manualmente.")
             elif t_final:
                 col_tipo_ruta.info("Tramo nuevo: indica el tipo de ruta.")
-            ruta_tipo = col_tipo_ruta.radio("🏔️ Tipo de ruta", ["Llano", "Alta Montaña"], horizontal=True, key="registro_tipo_ruta_manual")
+            ruta_tipo = col_tipo_ruta.radio("🏔️ Tipo de ruta", ["Seleccionar ruta", "Llano", "Alta Montaña"], horizontal=True, key="registro_tipo_ruta_manual")
 
-        marca = col_marca.radio("🏷️ Marca", marcas_disponibles, index=idx_marca, horizontal=True, key=f"m_{movil_sel}")
+        marcas_form = ["Seleccionar marca"] + marcas_disponibles
+        marca = col_marca.radio("🏷️ Marca", marcas_form, index=idx_marca + 1, horizontal=True, key=f"m_{movil_sel}")
 
     # Segundo bloque: datos de kilómetros y combustible.
     with st.form("registro_form_v2", clear_on_submit=True):
@@ -281,10 +299,15 @@ with tabs[0]:
             ltab = int(round(promedio_tablero * distancia_tablero / 100))
             campos_2[0].caption(f"Consumo estimado: {ltab} L")
             lral = campos_2[1].number_input("⏳ Litros ralentí", min_value=0.0, value=0.0, step=1.0, format="%.0f", key=f"ral_{movil_sel}")
-        else:
+        elif marca == "SCANIA":
             promedio_tablero = None
             ltab = campos_2[0].number_input("📟 Litros tablero", min_value=0.0, value=0.0, step=1.0, format="%.0f")
             lral = campos_2[1].number_input("⏳ Litros ralentí", min_value=0.0, value=0.0, step=1.0, format="%.0f")
+        else:
+            promedio_tablero = None
+            ltab = 0
+            lral = 0
+            campos_2[0].caption("Selecciona la marca para cargar el tablero.")
         precio_comb = campos_2[2].number_input("💰 Precio por litro", value=float(st.session_state["precio_gasoil"]))
 
         # Redondear las cantidades registradas al litro más cercano.
@@ -306,6 +329,14 @@ with tabs[0]:
     # Lógica de guardado
     if submit_button:
         # Validar datos antes de escribir en la hoja.
+        if chofer == "Seleccionar chofer":
+            st.error("⚠️ Selecciona el chofer antes de guardar."); st.stop()
+        if traza_sel == "Seleccionar tramo":
+            st.error("⚠️ Selecciona o crea un tramo antes de guardar."); st.stop()
+        if ruta_tipo == "Seleccionar ruta":
+            st.error("⚠️ Selecciona un tipo de ruta antes de guardar."); st.stop()
+        if marca == "Seleccionar marca":
+            st.error("⚠️ Selecciona la marca del móvil antes de guardar."); st.stop()
         if kmf <= kmi:
             st.error("⚠️ El KM Final debe ser mayor al Inicial."); st.stop()
         if precio_comb <= 0 or litros_cargados_total <= 0 or lral < 0:
@@ -720,6 +751,7 @@ with tabs[4]:
             st.plotly_chart(fig_km_unidad, use_container_width=True, config=chart_config)
 
             st.caption("El sistema solo distingue carga en taller/cisterna y carga en ruta; los registros actuales no identifican estaciones Shell o YPF. El rendimiento del informe se calcula como kilómetros recorridos ÷ litros cargados y puede diferir de los promedios del tablero.")
+
 
 
 
