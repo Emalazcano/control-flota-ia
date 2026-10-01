@@ -118,7 +118,7 @@ def cargar_historial():
         if "L_Ruta" not in df.columns:
             df["L_Ruta"] = 0
 
-        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti", "Lectura_Tablero_L_Inicial", "Lectura_Tablero_L_Final", "Lectura_Ralenti_L_Inicial", "Lectura_Ralenti_L_Final", "KM_Tablero_Reset_Inicial", "Promedio_Tablero_L100_Inicial", "KM_Tablero_Reset_Final", "Promedio_Tablero_L100_Final", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
+        num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti", "Promedio_Tablero_L100", "Lectura_Tablero_L_Inicial", "Lectura_Tablero_L_Final", "Lectura_Ralenti_L_Inicial", "Lectura_Ralenti_L_Final", "KM_Tablero_Reset_Inicial", "Promedio_Tablero_L100_Inicial", "KM_Tablero_Reset_Final", "Promedio_Tablero_L100_Final", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -197,19 +197,15 @@ with tabs[0]:
             l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, help="Combustible cargado en la cisterna de la empresa.")
             l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, help="Combustible cargado fuera de la empresa durante el viaje.")
             if marca == "MERCEDES BENZ":
-                st.caption("El tablero muestra promedio en L/100 km y kilómetros desde reset. Toma ambas lecturas al inicio y al final del período que estás registrando.")
-                km_tablero_ini = st.number_input("📟 KM desde reset al inicio", min_value=0.0, value=0.0, key=f"tab_km_ini_{movil_sel}")
-                promedio_tablero_ini = st.number_input("📈 Promedio al inicio (L/100 km)", min_value=0.0, value=0.0, key=f"tab_prom_ini_{movil_sel}")
-                km_tablero_fin = st.number_input("📟 KM desde reset al final", min_value=0.0, value=0.0, key=f"tab_km_fin_{movil_sel}")
-                promedio_tablero_fin = st.number_input("📈 Promedio al final (L/100 km)", min_value=0.0, value=0.0, key=f"tab_prom_fin_{movil_sel}")
-                litros_tablero_ini = km_tablero_ini * promedio_tablero_ini / 100
-                litros_tablero_fin = km_tablero_fin * promedio_tablero_fin / 100
-                ltab = litros_tablero_fin - litros_tablero_ini
+                st.caption("Ingresa el promedio que muestra el tablero desde reset. Se usarán los KM Inicial y KM Final de este registro para estimar los litros del viaje.")
+                promedio_tablero = st.number_input("📈 Promedio del tablero (L/100 km)", min_value=0.0, value=0.0, key=f"prom_tab_{movil_sel}")
+                distancia_tablero = max(kmf - kmi, 0)
+                ltab = promedio_tablero * distancia_tablero / 100
                 st.caption(f"Litros consumidos estimados en el período: {ltab:.1f} L")
                 st.caption("El ralentí ya está incluido en el promedio general. Si tienes una medición independiente, puedes anotarla aquí; no se suma otra vez al consumo.")
                 lral = st.number_input("⏳ Litros de ralentí (opcional)", min_value=0.0, value=0.0, key=f"ral_{movil_sel}")
             else:
-                km_tablero_ini = promedio_tablero_ini = km_tablero_fin = promedio_tablero_fin = None
+                promedio_tablero = None
                 ltab = st.number_input("📟 Litros consumidos según tablero", min_value=0.0, value=0.0)
                 lral = st.number_input("⏳ Litros consumidos en ralentí", min_value=0.0, value=0.0)
 
@@ -234,12 +230,8 @@ with tabs[0]:
         if precio_comb <= 0 or litros_cargados_total <= 0 or lral < 0:
             st.error("⚠️ El precio debe ser positivo, registra litros cargados en taller o en ruta y no ingreses litros negativos."); st.stop()
         if marca == "MERCEDES BENZ":
-            if km_tablero_fin <= km_tablero_ini or promedio_tablero_fin <= 0:
-                st.error("⚠️ Ingresa kilómetros desde reset crecientes y un promedio final mayor que cero."); st.stop()
-            if km_tablero_ini > 0 and promedio_tablero_ini <= 0:
-                st.error("⚠️ Si el contador ya tenía kilómetros al inicio, ingresa también el promedio inicial."); st.stop()
-            if ltab < 0:
-                st.error("⚠️ Los litros estimados del tablero no pueden ser negativos. Verifica las lecturas y que no haya habido un reset durante el período."); st.stop()
+            if promedio_tablero <= 0:
+                st.error("⚠️ Ingresa el promedio del tablero en L/100 km."); st.stop()
         if traza_sel == "➕ NUEVA" and not nt.strip():
             st.error("⚠️ Escribe el nombre de la nueva traza."); st.stop()
         
@@ -248,8 +240,7 @@ with tabs[0]:
             "Fecha": fecha_input.strftime('%d/%m/%Y'), "Chofer": chofer, "Movil": movil_sel, "Marca": marca,
             "Ruta": ruta_tipo, "Traza": t_final, "KM_Ini": kmi, "KM_Fin": kmf, "KM_Recorr": dist_final,
             "L_Taller": l_taller, "L_Ruta": l_ruta, "L_Tablero": ltab, "L_Ralenti": lral,
-            "KM_Tablero_Reset_Inicial": km_tablero_ini, "Promedio_Tablero_L100_Inicial": promedio_tablero_ini,
-            "KM_Tablero_Reset_Final": km_tablero_fin, "Promedio_Tablero_L100_Final": promedio_tablero_fin,
+            "Promedio_Tablero_L100": promedio_tablero,
             "Consumo_L100": round((litros_cargados_total/dist_final*100 if dist_final > 0 else 0), 2),
             "Costo_Total_ARS": round(litros_cargados_total * precio_comb, 2),
             "Desvio_Neto": round(litros_cargados_total - ltab, 2)
@@ -553,4 +544,5 @@ with tabs[4]:
         fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
                          text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
         st.plotly_chart(fig_bar, use_container_width=True)
+
 
