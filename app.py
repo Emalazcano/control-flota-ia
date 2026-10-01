@@ -117,11 +117,22 @@ def cargar_historial():
             df["L_Taller"] = 0
         if "L_Ruta" not in df.columns:
             df["L_Ruta"] = 0
+        if "L_Tablero" not in df.columns:
+            df["L_Tablero"] = 0
+        if "L_Ralenti" not in df.columns:
+            df["L_Ralenti"] = 0
+        if "Desvio_Neto" not in df.columns:
+            df["Desvio_Neto"] = 0
 
         num_cols = ["Movil", "KM_Fin", "KM_Ini", "L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti", "Promedio_Tablero_L100", "Lectura_Tablero_L_Inicial", "Lectura_Tablero_L_Final", "Lectura_Ralenti_L_Inicial", "Lectura_Ralenti_L_Final", "KM_Tablero_Reset_Inicial", "Promedio_Tablero_L100_Inicial", "KM_Tablero_Reset_Final", "Promedio_Tablero_L100_Final", "Desvio_Neto", "Consumo_L100", "Costo_Total_ARS"]
         for col in num_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # Las cantidades de litros se muestran y guardan como litros enteros.
+        for col in ["L_Taller", "L_Ruta", "L_Tablero", "L_Ralenti"]:
+            df[col] = df[col].round().astype("int64")
+        df["Desvio_Neto"] = df["L_Taller"] + df["L_Ruta"] - df["L_Tablero"]
 
         if 'Fecha' in df.columns:                                              # ← adentro del try
             df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
@@ -194,18 +205,21 @@ with tabs[0]:
         with c3:
             kmi = st.number_input("🛣️ KM Inicial", value=int(km_sugerido), step=1, format="%d")
             kmf = st.number_input("🏁 KM Final", value=0, step=1, format="%d")
-            l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, help="Combustible cargado en la cisterna de la empresa.")
-            l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, help="Combustible cargado fuera de la empresa durante el viaje.")
+            l_taller = st.number_input("⛽ Litros cargados en taller / cisterna", min_value=0.0, value=0.0, step=1.0, format="%.0f", help="Combustible cargado en la cisterna de la empresa.")
+            l_ruta = st.number_input("🛣️ Litros cargados en ruta", min_value=0.0, value=0.0, step=1.0, format="%.0f", help="Combustible cargado fuera de la empresa durante el viaje.")
             if marca == "MERCEDES BENZ":
                 promedio_tablero = st.number_input("📈 Promedio del tablero (L/100 km)", min_value=0.0, value=0.0, key=f"prom_tab_{movil_sel}")
                 distancia_tablero = max(kmf - kmi, 0)
-                ltab = promedio_tablero * distancia_tablero / 100
-                st.caption(f"Litros consumidos estimados en el período: {ltab:.1f} L")
-                lral = st.number_input("⏳ Litros de ralentí (opcional)", min_value=0.0, value=0.0, key=f"ral_{movil_sel}")
+                ltab = int(round(promedio_tablero * distancia_tablero / 100))
+                st.caption(f"Litros consumidos estimados en el período: {ltab} L")
+                lral = st.number_input("⏳ Litros de ralentí (opcional)", min_value=0.0, value=0.0, step=1.0, format="%.0f", key=f"ral_{movil_sel}")
             else:
                 promedio_tablero = None
-                ltab = st.number_input("📟 Litros consumidos según tablero", min_value=0.0, value=0.0)
-                lral = st.number_input("⏳ Litros consumidos en ralentí", min_value=0.0, value=0.0)
+                ltab = st.number_input("📟 Litros consumidos según tablero", min_value=0.0, value=0.0, step=1.0, format="%.0f")
+                lral = st.number_input("⏳ Litros consumidos en ralentí", min_value=0.0, value=0.0, step=1.0, format="%.0f")
+
+        # Redondear las cantidades registradas al litro más cercano.
+        l_taller, l_ruta, ltab, lral = [int(round(v)) for v in (l_taller, l_ruta, ltab, lral)]
 
         # Métricas visuales
         dist_v = int(kmf - kmi) if kmf > kmi else 0
@@ -216,7 +230,7 @@ with tabs[0]:
         with v1: st.metric("📏 KM", f"{dist_v:,}")
         with v2: st.metric("🔢 Consumo", f"{(litros_cargados_total/dist_v*100 if dist_v>0 else 0):.1f} L/100")
         with v3: st.metric("💰 Costo", f"${(litros_cargados_total*precio_comb):,.0f}")
-        with v4: st.metric("🚨 Desvío vs tablero", f"{desvio_v:.1f} L")
+        with v4: st.metric("🚨 Desvío vs tablero", f"{desvio_v:,.0f} L")
         
         submit_button = st.form_submit_button("💾 GUARDAR REGISTRO", use_container_width=True)
 
@@ -241,7 +255,7 @@ with tabs[0]:
             "Promedio_Tablero_L100": promedio_tablero,
             "Consumo_L100": round((litros_cargados_total/dist_final*100 if dist_final > 0 else 0), 2),
             "Costo_Total_ARS": round(litros_cargados_total * precio_comb, 2),
-            "Desvio_Neto": round(litros_cargados_total - ltab, 2)
+            "Desvio_Neto": int(litros_cargados_total - ltab)
         }
         
         df_final = pd.concat([df_h, pd.DataFrame([nuevo_reg])], ignore_index=True)
@@ -291,7 +305,7 @@ with tabs[1]:
         patron_sostenido = (desvio_unidad["Viajes"] >= 2) & (desvio_unidad["Promedio_Bruto"].abs() > 50) & (desvio_unidad["Variacion"] <= 50)
         desvio_unidad["Evaluación"] = "Sin patrón sostenido detectado"
         desvio_unidad.loc[patron_sostenido, "Evaluación"] = "Diferencia repetida: revisar tablero"
-        desvio_unidad["Sesgo_Tablero"] = desvio_unidad["Promedio_Bruto"].where(patron_sostenido, 0)
+        desvio_unidad["Sesgo_Tablero"] = desvio_unidad["Promedio_Bruto"].where(patron_sostenido, 0).round().astype(int)
         df_filtrado = df_filtrado.merge(desvio_unidad[["Mes_Año", "Movil", "Sesgo_Tablero"]], on=["Mes_Año", "Movil"], how="left")
         df_filtrado["Sesgo_Tablero"] = df_filtrado["Sesgo_Tablero"].fillna(0)
         df_filtrado["Desvio_Tras_Sesgo"] = df_filtrado["Desvio_Bruto"] - df_filtrado["Sesgo_Tablero"]
@@ -376,8 +390,10 @@ with tabs[1]:
         st.divider()
         st.subheader("🚌 Diferencia repetida por unidad")
         st.caption("Es una señal para revisar el tablero, no una conclusión definitiva: marca diferencias promedio mayores a 50 L repetidas en al menos dos viajes, con una variación entre viajes de hasta 50 L.")
+        desvio_unidad_vista = desvio_unidad.copy()
+        desvio_unidad_vista[["Promedio_Bruto", "Variacion"]] = desvio_unidad_vista[["Promedio_Bruto", "Variacion"]].round(0)
         st.dataframe(
-            desvio_unidad.rename(columns={
+            desvio_unidad_vista.rename(columns={
                 "Mes_Año": "Mes", "Movil": "Móvil", "Promedio_Bruto": "Diferencia promedio vs tablero (L)",
                 "Variacion": "Variación entre viajes (L)",
             }),
@@ -568,5 +584,6 @@ with tabs[4]:
         fig_bar = px.bar(df_bench, x="Ruta", y="Consumo_L100", color="Marca", barmode="group", 
                          text_auto='.1f', template="plotly_dark", title="Consumo Promedio (L/100km)")
         st.plotly_chart(fig_bar, use_container_width=True)
+
 
 
