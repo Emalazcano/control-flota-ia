@@ -5,7 +5,6 @@ openpyxl
 scikit-learn
 st-gsheets-connection
 fpdf2
-google-genai
 setuptools
 reportlab
 matplotlib
